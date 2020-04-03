@@ -1,0 +1,11 @@
+[package]
+name = "rlocc"
+version = "0.0.1"
+authors = ["Christos Katsakioris <ckatsak@gmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "Count lines of code in a file or a directory."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
