@@ -1,17 +1,61 @@
-// Copyright 2020 Christos Katsakioris
+// This file is part of rlocc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright (C) 2020 Christos Katsakioris
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-fn main() {
-    println!("Hello, world!");
+use std::env;
+use std::io;
+
+use rlocc::locc::{self, Config, LOCCount};
+
+fn main() -> io::Result<()> {
+    //let config = Config::new(env::args()).unwrap_or_default();
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let config = Config::new(args.into_iter(), 0).unwrap_or_default();
+    eprintln!("{:#?}", config);
+
+    let ret = locc::count_all(&config)?;
+    print_results(&ret)
+}
+
+fn print_results(_loccount: &LOCCount) -> io::Result<()> {
+    // TODO
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skip_arg() {
+        let orig_args = env::args().collect::<Vec<_>>();
+        let mut skip_args = env::args().skip(1).collect::<Vec<_>>();
+        eprintln!("Original arguments: {:#?}", orig_args);
+        eprintln!("Skipped arguments: {:#?}", skip_args);
+
+        assert_eq!(
+            orig_args
+                .iter()
+                .map(|arg| arg.to_string())
+                .skip(1)
+                .collect::<Vec<_>>(),
+            skip_args
+        );
+
+        skip_args.push("yolo".to_owned());
+        assert_ne!(orig_args.into_iter().skip(1).collect::<Vec<_>>(), skip_args);
+    }
 }
