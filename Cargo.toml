@@ -1,11 +1,19 @@
 [package]
 name = "rlocc"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Christos Katsakioris <ckatsak@gmail.com>"]
 edition = "2018"
-license = "Apache-2.0"
-description = "Count lines of code in a file or a directory."
+license = "GPL-3.0-or-later"
+description = "Count lines of code in files or directories."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+num_cpus = "1.12.0"
+#lazy_static = "1.4.0"
+once_cell = "1.3.1"
+crossbeam-channel = "0.4.2"
+crossbeam-utils= "0.7.2"
+
+[dev-dependencies]
+#tempfile = "3.1.0"
