@@ -47,7 +47,7 @@ pub static EXT_TO_LANG: Lazy<HashMap<&'static str, &'static Language>> = Lazy::n
 /// TODO: Documentation
 #[derive(Debug)]
 pub struct Language {
-    name: &'static str,
+    pub name: &'static str,
     extensions: &'static [&'static str],
 
     inline_comment_tokens: &'static [&'static str],
@@ -292,7 +292,7 @@ pub static LANG_ARRAY: [Language; 43] = [
     },
     Language {
         name: "Rust",
-        extensions: &["rs, rlib"],
+        extensions: &["rs", "rlib"],
         inline_comment_tokens: &["//", "///", "//!"],
         multiline_comment_start_tokens: &["/*", "/**", "/*!"],
         multiline_comment_end_tokens: &["*/"],

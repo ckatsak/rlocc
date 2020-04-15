@@ -21,17 +21,18 @@ use std::io;
 use rlocc::locc::{self, Config, LOCCount};
 
 fn main() -> io::Result<()> {
-    //let config = Config::new(env::args()).unwrap_or_default();
     let args = env::args().skip(1).collect::<Vec<_>>();
-    let config = Config::new(args.into_iter(), 0).unwrap_or_default();
+    let config = Config::new(args.into_iter(), 1).unwrap_or_default();
     eprintln!("{:#?}", config);
 
     let ret = locc::count_all(&config)?;
     print_results(&ret)
 }
 
-fn print_results(_loccount: &LOCCount) -> io::Result<()> {
+fn print_results(loccount: &LOCCount) -> io::Result<()> {
     // TODO
+    eprintln!("{:#?}", loccount);
+
     Ok(())
 }
 
