@@ -32,7 +32,6 @@ pub type LOCCount<'a> = HashMap<&'a str, i32>;
 /// TODO: Documentation
 #[derive(Debug)]
 struct CountResult(&'static str, i32);
-//type CountResult = (&'static str, i32);
 
 /// TODO: Documentation
 struct Coordinator<'a> {
@@ -134,16 +133,28 @@ impl<'a> Worker<'a> {
                 "[WORKER-{}][run] Received {:?} from paths_rx!",
                 self.id, path
             );
-            let res = self.process(path)?; // FIXME: error handling
-            eprintln!(
-                "[WORKER-{}][run] Sending '{:?}' down on res_rx...",
-                self.id, res
-            );
-            self.tx.send(res).unwrap(); // FIXME: error handling
-            eprintln!(
-                "[WORKER-{}][run] Sent! Now blocking on paths_rx again...",
-                self.id,
-            );
+
+            //let res = self.process(&path)?; // error handling
+            match self.process(&path) {
+                Ok(res) => {
+                    eprintln!(
+                        "[WORKER-{}][run] Sending '{:?}' down on res_rx...",
+                        self.id, res
+                    );
+                    self.tx.send(res).unwrap(); // FIXME error handling?
+                    eprintln!(
+                        "[WORKER-{}][run] Sent! Now blocking on paths_rx again...",
+                        self.id,
+                    );
+                }
+                Err(err) => {
+                    // FIXME proper logging?
+                    eprintln!(
+                        "[WORKER-{}][run] Error while processing file {:?}: {:#?}",
+                        self.id, path, err
+                    );
+                }
+            };
         }
         eprintln!(
             "[WORKER-{}][run] paths_rx looks disconnected and empty!",
@@ -161,12 +172,11 @@ impl<'a> Worker<'a> {
 
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, path: PathBuf) -> io::Result<CountResult> {
+    fn process(&self, path: &PathBuf) -> io::Result<CountResult> {
         let ext = path.extension().unwrap(); // FIXME error handling
         let lang = EXT_TO_LANG.get(&ext.to_str().unwrap()).unwrap(); // FIXME error handling
 
         //Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
-        //Ok((lang.name, 1)) // FIXME: Count files for now
         Ok(CountResult(lang.name, 1)) // FIXME: Count files for now
     }
 }
