@@ -17,6 +17,9 @@
 
 use std::collections::HashMap;
 
+use std::io;
+use std::path::Path;
+
 //use lazy_static::lazy_static;
 //
 //lazy_static! {
@@ -43,6 +46,36 @@ pub static EXT_TO_LANG: Lazy<HashMap<&'static str, &'static Language>> = Lazy::n
     }
     ext2lang
 });
+
+//pub fn guess_language<'a, P: AsRef<Path>>(p: P) -> io::Result<(&'a str, &'a Language)> {
+//pub fn guess_language<'a, 'b, P: 'b + AsRef<Path>>(p: P) -> io::Result<(&'a str, &'a Language)> {
+//pub fn guess_language<'a, P>(p: P) -> io::Result<(&'a str, &'a Language)>
+/// TODO Implementation
+/// TODO Documentation
+pub fn guess_language<'a, 'b, P>(p: &'a P) -> io::Result<(&'a str, &'b Language)>
+where
+    P: 'a + AsRef<Path>,
+{
+    let path = p.as_ref();
+    let ext = path
+        .extension()
+        .ok_or(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Invalid extension in {}", path.display()),
+        ))?
+        .to_str()
+        .ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Extension contains invalid UTF-8",
+        ))?;
+
+    let lang = EXT_TO_LANG.get(&ext).ok_or(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("Unsupported extension '{}'", ext),
+    ))?;
+
+    Ok((ext, *lang)) // FIXME? lang vs *lang
+}
 
 /// TODO: Documentation
 #[derive(Debug)]

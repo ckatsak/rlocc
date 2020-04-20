@@ -15,11 +15,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// FIXME: This doesn't look very Rusty...
+pub const STATE_INITIAL: usize = 0;
+pub const STATE_MULTI_LINE_COMMENT: usize = 1;
+pub const STATE_CODE: usize = 2;
+pub const NUM_STATES: usize = 3;
+
+/// TODO: Implementation
+/// TODO: Documentation
+pub enum StateVariant {
+    StateInitial,
+    StateMultiLineComment,
+    StateCode,
+    //StateInitial(StateInitial),
+    //StateMultiLineComment(StateMultiLineComment),
+    //StateCode(StateCode),
+}
+
 /// The current state of the LOC counting procedure of a `crate::locc::count::Worker`. The state of
 /// a Worker may change multiple times while processing a single line.
 ///
 /// TODO: Implementation
-pub trait State: Sync {
+pub trait State: Sync + Send {
     fn process(&self, line: &str) -> bool;
 }
 

@@ -15,23 +15,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::locc::states::{State, StateInitial};
 use std::collections::HashMap;
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 
 use crossbeam_channel as chan;
 use crossbeam_utils::thread;
 
 use super::{Config, EXT_TO_LANG};
+use crate::locc::languages;
+use crate::locc::states::*;
+
+const BUF_SIZE: usize = 1 << 14;
 
 /// TODO: Documentation
 pub type LOCCount<'a> = HashMap<&'a str, i32>;
 
 /// TODO: Documentation
-#[derive(Debug)]
-struct CountResult(&'static str, i32);
+type CountResult = (&'static str, i32);
+//#[derive(Debug)]
+//struct CountResult(&'static str, i32);
 
 /// TODO: Documentation
 struct Coordinator<'a> {
@@ -42,6 +46,7 @@ struct Coordinator<'a> {
 
 impl<'a> Coordinator<'a> {
     /// TODO: Documentation
+    #[inline]
     fn run(self) -> io::Result<LOCCount<'a>> {
         self.walk_paths()?;
         self.aggregate_results()
@@ -118,15 +123,19 @@ impl<'a> Coordinator<'a> {
 /// TODO: Implementation
 /// TODO: Documentation
 struct Worker<'a> {
-    id: usize, // FIXME just for devel
+    id: usize, // FIXME just for devel? useful for logging too
     tx: chan::Sender<CountResult>,
     rx: chan::Receiver<PathBuf>,
-    state: &'a dyn State,
+    ////state: Box<dyn State>,
+    //state: StateVariant,
+    //states: HashMap<StateVariant, Box<dyn State>>,
+    state: Option<&'a mut Box<dyn State>>,
+    states: [Box<dyn State>; NUM_STATES],
 }
 
 impl<'a> Worker<'a> {
     /// TODO: Documentation
-    fn run(self) -> io::Result<()> {
+    fn run(mut self) -> io::Result<()> {
         eprintln!("[WORKER-{}][run] Blocking on paths_rx...", self.id);
         while let Ok(path) = self.rx.recv() {
             eprintln!(
@@ -135,7 +144,7 @@ impl<'a> Worker<'a> {
             );
 
             //let res = self.process(&path)?; // error handling
-            match self.process(&path) {
+            match self.process_file(&path) {
                 Ok(res) => {
                     eprintln!(
                         "[WORKER-{}][run] Sending '{:?}' down on res_rx...",
@@ -172,12 +181,73 @@ impl<'a> Worker<'a> {
 
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, path: &PathBuf) -> io::Result<CountResult> {
-        let ext = path.extension().unwrap(); // FIXME error handling
-        let lang = EXT_TO_LANG.get(&ext.to_str().unwrap()).unwrap(); // FIXME error handling
+    fn process_file(&self, path: &PathBuf) -> io::Result<CountResult> {
+        ////let ext = path.extension().unwrap(); // error handling
+        //let ext = path
+        //    .extension()
+        //    .ok_or(io::Error::new(
+        //        io::ErrorKind::InvalidData,
+        //        format!("Invalid extension in {}", path.display()),
+        //    ))?
+        //    .to_str()
+        //    .ok_or(io::Error::new(
+        //        io::ErrorKind::Other,
+        //        format!("Extension contains invalid UTF-8"),
+        //    ))?;
+
+        ////let lang = EXT_TO_LANG.get(&ext.to_str().unwrap()).unwrap(); // error handling
+        //let lang = EXT_TO_LANG.get(&ext).ok_or(io::Error::new(
+        //    io::ErrorKind::NotFound,
+        //    format!("Unsupported extension '{}'", ext),
+        //))?;
+
+        let (ext, lang) = languages::guess_language(path)?;
+
+        //self.state = Some(&mut self.states[STATE_INITIAL]);
+
+        ////for line in file_rd.lines() {
+        ////    let line = line.unwrap();
+        ////    // TODO
+        ////}
+        //let file_cont = std::fs::read(path)?;
+        //for line in file_cont.split()
+        let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
+        //let buf = Vec::<u8>::with_capacity(BUF_SIZE);
+        let mut buf = String::with_capacity(BUF_SIZE);
+        loop {
+            buf.clear();
+            match file_rd.read_line(&mut buf) {
+                Ok(0) => {
+                    // TODO somehow reset self.state ?
+                    break;
+                }
+                Ok(_) => {
+                    self.process_line(&buf)?
+                    // TODO somehow update self.state ?
+                }
+                Err(err) => {
+                    // FIXME proper logging?
+                    eprintln!(
+                        "[WORKER-{}][process] Error on read_line in file {}: {}",
+                        self.id,
+                        path.display(),
+                        err,
+                    );
+                    return Err(err);
+                }
+            }
+        }
 
         //Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
-        Ok(CountResult(lang.name, 1)) // FIXME: Count files for now
+        Ok((lang.name, 1)) // FIXME: Count files for now
+    }
+
+    fn process_line(&self, line: &str) -> io::Result<()> {
+        let line = line.trim_start();
+
+        // TODO
+
+        Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
     }
 }
 
@@ -191,11 +261,18 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
         let (res_tx, res_rx) = chan::unbounded();
 
         for id in 0..config.num_threads {
+            let states: [Box<dyn State>; NUM_STATES] = [
+                Box::new(StateInitial {}),
+                Box::new(StateMultiLineComment {}),
+                Box::new(StateCode {}),
+            ];
             let worker = Worker {
                 id,
                 tx: res_tx.clone(),
                 rx: paths_rx.clone(),
-                state: &StateInitial {},
+                //state: states[STATE_INITIAL],
+                state: None,
+                states,
             };
             s.spawn(|_| worker.run()); // TODO really ignore thread handles?
         }
@@ -248,14 +325,13 @@ mod tests {
         };
 
         thread::scope(|s| {
-            let mut handles = vec![];
             for id in 0..me.config.num_threads {
                 let morcker = Morcker {
                     id,
                     tx: res_tx.clone(),
                     rx: paths_rx.clone(),
                 };
-                handles.push(s.spawn(|_| morcker.run()));
+                //s.spawn(|_| morcker.run());
             }
             //for h in handles {
             //    h.join().unwrap();
