@@ -23,9 +23,10 @@ use std::path::PathBuf;
 use crossbeam_channel as chan;
 use crossbeam_utils::thread;
 
-use super::{Config, EXT_TO_LANG};
-use crate::locc::languages;
-use crate::locc::states::*;
+use super::{languages, states::*, Config};
+//use crate::locc::languages;
+//use crate::locc::states::*;
+//use crate::locc::Config;
 
 const BUF_SIZE: usize = 1 << 14;
 
@@ -53,7 +54,7 @@ impl<'a> Coordinator<'a> {
     }
 
     /// Drop the sending end of the path channel and loop through workers threads' results,
-    /// aggregating them in a `super::LOCCount`.
+    /// aggregating them in a `rlocc::LOCCount`.
     fn aggregate_results(self) -> io::Result<LOCCount<'a>> {
         // Drop the sending-end of the channel to signal workers that
         // they will not be receiving any more paths to process.
@@ -213,7 +214,7 @@ impl<'a> Worker<'a> {
         //for line in file_cont.split()
         let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
         //let buf = Vec::<u8>::with_capacity(BUF_SIZE);
-        let mut buf = String::with_capacity(BUF_SIZE);
+        let mut buf = String::with_capacity(BUF_SIZE); // FIXME? don't preallocate here
         loop {
             buf.clear();
             match file_rd.read_line(&mut buf) {

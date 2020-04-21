@@ -18,7 +18,8 @@
 pub use self::config::Config;
 pub use self::count::*;
 //pub use self::languages::LANGUAGES;
-pub use self::languages::EXT_TO_LANG;
+//pub use self::languages::EXT_TO_LANG;
+pub use self::languages::guess_language;
 
 mod config;
 mod count;

@@ -16,7 +16,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-
 use std::io;
 use std::path::Path;
 
@@ -47,34 +46,36 @@ pub static EXT_TO_LANG: Lazy<HashMap<&'static str, &'static Language>> = Lazy::n
     ext2lang
 });
 
-//pub fn guess_language<'a, P: AsRef<Path>>(p: P) -> io::Result<(&'a str, &'a Language)> {
-//pub fn guess_language<'a, 'b, P: 'b + AsRef<Path>>(p: P) -> io::Result<(&'a str, &'a Language)> {
-//pub fn guess_language<'a, P>(p: P) -> io::Result<(&'a str, &'a Language)>
-/// TODO Implementation
-/// TODO Documentation
-pub fn guess_language<'a, 'b, P>(p: &'a P) -> io::Result<(&'a str, &'b Language)>
+/// This function attempts to figure out whether the given path corresponds to a file whose
+/// contained source code is written in a language supported by rlocc.
+///
+/// If it is, then the function returns a tuple containing the extension of the file (which was
+/// used to guess the language) and a reference to the associated `rlocc::languages::Language`
+/// struct.
+pub fn guess_language<'a, 'b, P>(path: &'a P) -> io::Result<(&'a str, &'b Language)>
 where
     P: 'a + AsRef<Path>,
 {
-    let path = p.as_ref();
+    let path = path.as_ref();
     let ext = path
         .extension()
-        .ok_or(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Invalid extension in {}", path.display()),
-        ))?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid extension in {}", path.display()),
+            )
+        })?
         .to_str()
-        .ok_or(io::Error::new(
-            io::ErrorKind::Other,
-            "Extension contains invalid UTF-8",
-        ))?;
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Extension contains invalid UTF-8"))?;
 
-    let lang = EXT_TO_LANG.get(&ext).ok_or(io::Error::new(
-        io::ErrorKind::NotFound,
-        format!("Unsupported extension '{}'", ext),
-    ))?;
+    let lang = EXT_TO_LANG.get(&ext).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Unsupported extension '{}'", ext),
+        )
+    })?;
 
-    Ok((ext, *lang)) // FIXME? lang vs *lang
+    Ok((ext, *lang))
 }
 
 /// TODO: Documentation
