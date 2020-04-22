@@ -82,11 +82,11 @@ where
 #[derive(Debug)]
 pub struct Language {
     pub name: &'static str,
-    extensions: &'static [&'static str],
+    pub extensions: &'static [&'static str],
 
-    inline_comment_tokens: &'static [&'static str],
-    multiline_comment_start_tokens: &'static [&'static str],
-    multiline_comment_end_tokens: &'static [&'static str],
+    pub inline_comment_tokens: &'static [&'static str],
+    pub multiline_comment_start_tokens: &'static [&'static str],
+    pub multiline_comment_end_tokens: &'static [&'static str],
 }
 
 /// TODO: Documentation

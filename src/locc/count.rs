@@ -15,28 +15,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use crossbeam_channel as chan;
 use crossbeam_utils::thread;
 
-use super::{languages, states::*, Config};
-//use crate::locc::languages;
-//use crate::locc::states::*;
-//use crate::locc::Config;
+use super::languages::{self, Language};
+use super::states::*;
+use super::Config;
 
 const BUF_SIZE: usize = 1 << 14;
 
 /// TODO: Documentation
 pub type LOCCount<'a> = HashMap<&'a str, i32>;
 
-/// TODO: Documentation
-type CountResult = (&'static str, i32);
 //#[derive(Debug)]
-//struct CountResult(&'static str, i32);
+//struct CountResult {
+//    total: i32,
+//    code: i32,
+//    comments: i32,
+//    blank: i32,
+//}
+/// The result of counting a single file.
+type CountResult = (&'static str, i32);
 
 /// TODO: Documentation
 struct Coordinator<'a> {
@@ -46,7 +52,7 @@ struct Coordinator<'a> {
 }
 
 impl<'a> Coordinator<'a> {
-    /// TODO: Documentation
+    /// Entry point for the Coordinator thread.
     #[inline]
     fn run(self) -> io::Result<LOCCount<'a>> {
         self.walk_paths()?;
@@ -63,17 +69,30 @@ impl<'a> Coordinator<'a> {
         // Now loop over the receiving-end of the results channel, aggregating all of them into the
         // final LOCCount object that is going to be returned.
         let mut ret = HashMap::new();
-        eprintln!("[COORDINATOR][aggregate_results] Blocking on res_rx...");
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[{}:{}][COORDINATOR][aggregate_results] Blocking on res_rx...",
+            file!(),
+            line!()
+        );
         while let Ok(res) = self.rx.recv() {
+            #[cfg(debug_assertions)]
             eprintln!(
-                "[COORDINATOR][aggregate_results] Received '{:?}'. Blocking on res_rx again...",
+                "[{}:{}][COORDINATOR][aggregate_results] Received '{:?}'. Blocking on res_rx again...",
+                file!(),
+                line!(),
                 res
             );
             ret.entry(res.0)
                 .and_modify(|cnt| *cnt += res.1)
                 .or_insert(res.1);
         }
-        eprintln!("[COORDINATOR][aggregate_results] res_rs looks disconnected and empty!'");
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[{}:{}][COORDINATOR][aggregate_results] res_rs looks disconnected and empty!",
+            file!(),
+            line!()
+        );
         Ok(ret)
     }
 
@@ -82,15 +101,30 @@ impl<'a> Coordinator<'a> {
     fn walk_paths(&self) -> io::Result<()> {
         for path in self.config.paths.iter() {
             if path.is_file() {
-                eprintln!("[COORDINATOR][walk_paths] Sending {:?}...", path);
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[{}:{}][COORDINATOR][walk_paths] Sending {:?}...",
+                    file!(),
+                    line!(),
+                    path
+                );
                 self.tx.send(path.to_owned()).unwrap();
             } else if path.is_dir() {
-                eprintln!("[COORDINATOR][walk_paths] Diving into {:?}...", path);
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[{}:{}][COORDINATOR][walk_paths] Diving into {:?}...",
+                    file!(),
+                    line!(),
+                    path
+                );
                 self.__walk(path)?;
             } else {
                 // FIXME(ckatsak): logger or something
+                #[cfg(debug_assertions)]
                 eprintln!(
-                    "[COORDINATOR][walk_paths] Skipping non-regular file {:?}.",
+                    "[{}:{}][COORDINATOR][walk_paths] Skipping non-regular file {:?}.",
+                    file!(),
+                    line!(),
                     path
                 );
             }
@@ -104,15 +138,30 @@ impl<'a> Coordinator<'a> {
         for direntry in fs::read_dir(path)? {
             let direntry = direntry?.path();
             if direntry.is_file() {
-                eprintln!("[COORDINATOR][__walk] Sending {:?}...", direntry);
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[{}:{}][COORDINATOR][__walk] Sending {:?}...",
+                    file!(),
+                    line!(),
+                    direntry
+                );
                 self.tx.send(direntry).unwrap();
             } else if direntry.is_dir() {
-                eprintln!("[COORDINATOR][__walk] Diving into {:?}...", direntry);
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[{}:{}][COORDINATOR][__walk] Diving into {:?}...",
+                    file!(),
+                    line!(),
+                    direntry
+                );
                 self.__walk(&direntry)?;
             } else {
                 // FIXME(ckatsak): logger or something
+                #[cfg(debug_assertions)]
                 eprintln!(
-                    "[COORDINATOR][__walk] Skipping non-regular file {:?}.",
+                    "[{}:{}][COORDINATOR][__walk] Skipping non-regular file {:?}.",
+                    file!(),
+                    line!(),
                     direntry
                 );
             }
@@ -123,51 +172,82 @@ impl<'a> Coordinator<'a> {
 
 /// TODO: Implementation
 /// TODO: Documentation
-struct Worker<'a> {
+pub struct Worker<'a> {
     id: usize, // FIXME just for devel? useful for logging too
     tx: chan::Sender<CountResult>,
     rx: chan::Receiver<PathBuf>,
-    ////state: Box<dyn State>,
-    //state: StateVariant,
-    //states: HashMap<StateVariant, Box<dyn State>>,
-    state: Option<&'a mut Box<dyn State>>,
-    states: [Box<dyn State>; NUM_STATES],
+
+    //state: Option<&'a mut Box<dyn State>>,
+    ////state: Option<&'a mut dyn State>,
+    //states: [Box<dyn State>; NUM_STATES],
+    ///////////////////////////
+    state: Option<Rc<RefCell<dyn State>>>,
+    states: [Rc<RefCell<dyn State>>; NUM_STATES],
+
+    pub curr_line: String,
+    //pub curr_str: Option<&'a str>,
+    pub curr_line_counted: bool,
+    pub curr_lang: Option<&'a Language>,
 }
 
 impl<'a> Worker<'a> {
-    /// TODO: Documentation
+    /// Entry point for each Worker thread.
     fn run(mut self) -> io::Result<()> {
-        eprintln!("[WORKER-{}][run] Blocking on paths_rx...", self.id);
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[{}:{}][WORKER-{}][run] Blocking on paths_rx...",
+            file!(),
+            line!(),
+            self.id
+        );
         while let Ok(path) = self.rx.recv() {
+            #[cfg(debug_assertions)]
             eprintln!(
-                "[WORKER-{}][run] Received {:?} from paths_rx!",
-                self.id, path
+                "[{}:{}][WORKER-{}][run] Received {:?} from paths_rx!",
+                file!(),
+                line!(),
+                self.id,
+                path
             );
 
-            //let res = self.process(&path)?; // error handling
             match self.process_file(&path) {
                 Ok(res) => {
+                    #[cfg(debug_assertions)]
                     eprintln!(
-                        "[WORKER-{}][run] Sending '{:?}' down on res_rx...",
-                        self.id, res
+                        "[{}:{}][WORKER-{}][run] Sending '{:?}' down on res_rx...",
+                        file!(),
+                        line!(),
+                        self.id,
+                        res
                     );
                     self.tx.send(res).unwrap(); // FIXME error handling?
+                    #[cfg(debug_assertions)]
                     eprintln!(
-                        "[WORKER-{}][run] Sent! Now blocking on paths_rx again...",
+                        "[{}:{}][WORKER-{}][run] Sent! Now blocking on paths_rx again...",
+                        file!(),
+                        line!(),
                         self.id,
                     );
                 }
                 Err(err) => {
                     // FIXME proper logging?
+                    #[cfg(debug_assertions)]
                     eprintln!(
-                        "[WORKER-{}][run] Error while processing file {:?}: {:#?}",
-                        self.id, path, err
+                        "[{}:{}][WORKER-{}][run] Error while processing file {:?}: {:#?}",
+                        file!(),
+                        line!(),
+                        self.id,
+                        path,
+                        err
                     );
                 }
             };
         }
+        #[cfg(debug_assertions)]
         eprintln!(
-            "[WORKER-{}][run] paths_rx looks disconnected and empty!",
+            "[{}:{}][WORKER-{}][run] paths_rx looks disconnected and empty!",
+            file!(),
+            line!(),
             self.id,
         );
         // At this point, the paths' channel must have been disconnected by the Coordinator and
@@ -182,54 +262,40 @@ impl<'a> Worker<'a> {
 
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process_file(&self, path: &PathBuf) -> io::Result<CountResult> {
-        ////let ext = path.extension().unwrap(); // error handling
-        //let ext = path
-        //    .extension()
-        //    .ok_or(io::Error::new(
-        //        io::ErrorKind::InvalidData,
-        //        format!("Invalid extension in {}", path.display()),
-        //    ))?
-        //    .to_str()
-        //    .ok_or(io::Error::new(
-        //        io::ErrorKind::Other,
-        //        format!("Extension contains invalid UTF-8"),
-        //    ))?;
+    fn process_file(&mut self, path: &PathBuf) -> io::Result<CountResult> {
+        let (_, lang) = languages::guess_language(path)?;
+        self.curr_lang = Some(lang);
+        self.set_state(STATE_INITIAL);
+        let mut ret: CountResult = (lang.name, 1); // FIXME Count files for now
 
-        ////let lang = EXT_TO_LANG.get(&ext.to_str().unwrap()).unwrap(); // error handling
-        //let lang = EXT_TO_LANG.get(&ext).ok_or(io::Error::new(
-        //    io::ErrorKind::NotFound,
-        //    format!("Unsupported extension '{}'", ext),
-        //))?;
-
-        let (ext, lang) = languages::guess_language(path)?;
-
-        //self.state = Some(&mut self.states[STATE_INITIAL]);
-
-        ////for line in file_rd.lines() {
-        ////    let line = line.unwrap();
-        ////    // TODO
-        ////}
-        //let file_cont = std::fs::read(path)?;
-        //for line in file_cont.split()
         let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
-        //let buf = Vec::<u8>::with_capacity(BUF_SIZE);
-        let mut buf = String::with_capacity(BUF_SIZE); // FIXME? don't preallocate here
         loop {
-            buf.clear();
-            match file_rd.read_line(&mut buf) {
+            self.curr_line.clear();
+            match file_rd.read_line(&mut self.curr_line) {
                 Ok(0) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!(
+                        "[{}:{}][WORKER-{}][process_file] Reached EOF in file {}",
+                        file!(),
+                        line!(),
+                        self.id,
+                        path.display()
+                    );
                     // TODO somehow reset self.state ?
                     break;
                 }
                 Ok(_) => {
-                    self.process_line(&buf)?
+                    //self.curr_str = Some(&self.curr_line);
+                    self.process_line(&mut ret)?
                     // TODO somehow update self.state ?
                 }
                 Err(err) => {
                     // FIXME proper logging?
+                    #[cfg(debug_assertions)]
                     eprintln!(
-                        "[WORKER-{}][process] Error on read_line in file {}: {}",
+                        "[{}:{}][WORKER-{}][process_file] Error reading lines in file {}: {}",
+                        file!(),
+                        line!(),
                         self.id,
                         path.display(),
                         err,
@@ -240,15 +306,38 @@ impl<'a> Worker<'a> {
         }
 
         //Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
-        Ok((lang.name, 1)) // FIXME: Count files for now
+        //Ok(CountResult {
+        //    total: 0,
+        //    code: 0,
+        //    comments: 0,
+        //    blank: 0,
+        //})
+        Ok(ret)
     }
 
-    fn process_line(&self, line: &str) -> io::Result<()> {
-        let line = line.trim_start();
+    fn process_line(&mut self, result: &mut CountResult) -> io::Result<()> {
+        //let line = self.curr_line.trim_start();
+        //if line.is_empty() {
+        //    //result.blank += 1; // FIXME
+        //    return Ok(());
+        //}
+
+        self.curr_line_counted = false;
+        if let Some(state) = self.state.take() {
+            let state = state.borrow_mut();
+            while state.process(self) {}
+        }
 
         // TODO
 
         Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
+    }
+
+    /// TODO Documentation
+    #[inline]
+    pub fn set_state(&mut self, state_no: usize) {
+        //self.state = Some(&mut self.states[state_no]);
+        self.state = Some(Rc::clone(&self.states[state_no]));
     }
 }
 
@@ -262,21 +351,31 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
         let (res_tx, res_rx) = chan::unbounded();
 
         for id in 0..config.num_threads {
-            let states: [Box<dyn State>; NUM_STATES] = [
-                Box::new(StateInitial {}),
-                Box::new(StateMultiLineComment {}),
-                Box::new(StateCode {}),
-            ];
-            let worker = Worker {
-                id,
-                tx: res_tx.clone(),
-                rx: paths_rx.clone(),
-                //state: states[STATE_INITIAL],
-                state: None,
-                states,
-            };
-            s.spawn(|_| worker.run()); // TODO really ignore thread handles?
+            let tx = res_tx.clone();
+            let rx = paths_rx.clone();
+            s.spawn(move |_| {
+                let worker = Worker {
+                    id,
+                    tx,
+                    rx,
+
+                    state: None,
+                    states: [
+                        Rc::new(RefCell::new(StateInitial {})),
+                        Rc::new(RefCell::new(StateMultiLineComment {})),
+                        Rc::new(RefCell::new(StateCode {})),
+                    ],
+
+                    curr_line: String::new(),
+                    //curr_str: None,
+                    curr_line_counted: false,
+                    curr_lang: None,
+                };
+
+                worker.run()
+            }); // TODO really ignore thread handles? Find out how does that work
         }
+
         drop(paths_rx); // Nobody else receives paths; Coordinator is the sender.
         drop(res_tx); // Nobody else sends results; Coordinator is the receiver.
 
