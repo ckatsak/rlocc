@@ -15,12 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use crossbeam_channel as chan;
 use crossbeam_utils::thread;
@@ -45,23 +43,23 @@ pub type LOCCount<'a> = HashMap<&'a str, i32>;
 type CountResult = (&'static str, i32);
 
 /// TODO: Documentation
-struct Coordinator<'a> {
-    config: &'a Config,
+struct Coordinator<'coord> {
+    config: &'coord Config,
     tx: chan::Sender<PathBuf>,
     rx: chan::Receiver<CountResult>,
 }
 
-impl<'a> Coordinator<'a> {
+impl<'coord> Coordinator<'coord> {
     /// Entry point for the Coordinator thread.
     #[inline]
-    fn run(self) -> io::Result<LOCCount<'a>> {
+    fn run(self) -> io::Result<LOCCount<'coord>> {
         self.walk_paths()?;
         self.aggregate_results()
     }
 
     /// Drop the sending end of the path channel and loop through workers threads' results,
     /// aggregating them in a `rlocc::LOCCount`.
-    fn aggregate_results(self) -> io::Result<LOCCount<'a>> {
+    fn aggregate_results(self) -> io::Result<LOCCount<'coord>> {
         // Drop the sending-end of the channel to signal workers that
         // they will not be receiving any more paths to process.
         drop(self.tx);
@@ -172,17 +170,17 @@ impl<'a> Coordinator<'a> {
 
 /// TODO: Implementation
 /// TODO: Documentation
-pub struct ParsingState<'file> {
-    pub curr_line: Option<&'file str>,
-    pub curr_line_counted: bool,
-    pub curr_lang: &'file Language,
+pub struct ParsingState<'line> {
+    pub curr_line: Option<&'line str>,
+    pub curr_line_counted: bool, // FIXME think again what that actually means
+    pub curr_lang: &'line Language,
 }
 
-impl<'file> ParsingState<'file> {
+impl<'line> ParsingState<'line> {
     /// TODO: Implementation
     /// TODO: Documentation
     #[inline]
-    pub fn new(lang: &'file Language) -> Self {
+    pub fn new(lang: &'line Language) -> Self {
         ParsingState {
             curr_line: None,
             curr_line_counted: false,
@@ -193,7 +191,7 @@ impl<'file> ParsingState<'file> {
 
 /// TODO: Implementation
 /// TODO: Documentation
-pub struct Worker {
+struct Worker {
     id: usize, // FIXME just for devel? useful for logging too
     tx: chan::Sender<CountResult>,
     rx: chan::Receiver<PathBuf>,
@@ -202,13 +200,14 @@ pub struct Worker {
     ////state: Option<&'a mut dyn State>,
     //states: [Box<dyn State>; NUM_STATES],
     ///////////////////////////
-    state: Option<Rc<RefCell<dyn State>>>,
-    states: [Rc<RefCell<dyn State>>; NUM_STATES],
+    //state: Option<Rc<RefCell<dyn State>>>,
+    //states: [Rc<RefCell<dyn State>>; NUM_STATES],
+    sm: LOCStateMachine,
 
     buffer: String,
 }
 
-impl<'worker, 'file: 'worker> Worker {
+impl<'line, 'worker: 'line> Worker {
     /// Entry point for each Worker thread.
     fn run(mut self) -> io::Result<()> {
         #[cfg(debug_assertions)]
@@ -284,11 +283,11 @@ impl<'worker, 'file: 'worker> Worker {
         let (_, lang) = languages::guess_language(path)?;
 
         let mut ret: CountResult = (lang.name, 1); // FIXME Count files for now
-        let mut pd = ParsingState::new(lang);
-        self.set_state(STATE_INITIAL);
+        self.sm.set_state(STATE_INITIAL);
 
         let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
         loop {
+            let mut pd = ParsingState::new(lang);
             self.buffer.clear();
             match file_rd.read_line(&mut self.buffer) {
                 Ok(0) => {
@@ -304,7 +303,7 @@ impl<'worker, 'file: 'worker> Worker {
                     break;
                 }
                 Ok(_) => {
-                    self.process_line(&mut pd, &mut ret)?
+                    self.process_line(&mut pd, &mut ret)?;
                     // TODO somehow update self.state ?
                 }
                 Err(err) => {
@@ -335,25 +334,28 @@ impl<'worker, 'file: 'worker> Worker {
 
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process_line(&mut self, ps: &mut ParsingState, result: &mut CountResult) -> io::Result<()> {
+    fn process_line(
+        &'worker mut self,
+        ps: &mut ParsingState<'line>,
+        //ps: &'file mut ParsingState<'file>,
+        result: &mut CountResult,
+    ) -> io::Result<()> {
         ps.curr_line_counted = false;
         ps.curr_line = Some(&self.buffer[..]);
-        if let Some(state) = self.state.take() {
-            let state = state.borrow_mut();
-            while state.process(ps, self) {}
-        }
+        self.sm.process(ps);
+        ps.curr_line = None;
 
         // TODO
 
         Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
     }
 
-    /// TODO Documentation
-    #[inline]
-    pub fn set_state(&mut self, state_no: usize) {
-        //self.state = Some(&mut self.states[state_no]);
-        self.state = Some(Rc::clone(&self.states[state_no]));
-    }
+    ///// TODO Documentation
+    //#[inline]
+    //pub fn set_state(&mut self, state_no: usize) {
+    //    //self.state = Some(&mut self.states[state_no]);
+    //    self.state = Some(Rc::clone(&self.states[state_no]));
+    //}
 }
 
 /// TODO: Implementation?
@@ -374,12 +376,13 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
                     tx,
                     rx,
 
-                    state: None,
-                    states: [
-                        Rc::new(RefCell::new(StateInitial {})),
-                        Rc::new(RefCell::new(StateMultiLineComment {})),
-                        Rc::new(RefCell::new(StateCode {})),
-                    ],
+                    //state: None,
+                    //states: [
+                    //    Rc::new(RefCell::new(StateInitial {})),
+                    //    Rc::new(RefCell::new(StateMultiLineComment {})),
+                    //    Rc::new(RefCell::new(StateCode {})),
+                    //],
+                    sm: LOCStateMachine::new(),
 
                     buffer: String::new(),
                 };

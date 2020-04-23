@@ -15,8 +15,49 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use super::count::{ParsingState, Worker};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::count::ParsingState;
 use super::languages::Language;
+
+/// TODO Implementation
+/// TODO Documentation
+pub struct LOCStateMachine {
+    state: Option<Rc<RefCell<dyn State>>>,
+    states: [Rc<RefCell<dyn State>>; NUM_STATES],
+}
+
+impl LOCStateMachine {
+    /// TODO Documentation
+    #[inline]
+    pub fn new() -> Self {
+        LOCStateMachine {
+            state: None,
+            states: [
+                Rc::new(RefCell::new(StateInitial {})),
+                Rc::new(RefCell::new(StateMultiLineComment {})),
+                Rc::new(RefCell::new(StateCode {})),
+            ],
+        }
+    }
+
+    /// TODO Documentation
+    #[inline]
+    pub fn set_state(&mut self, state_no: usize) {
+        self.state = Some(Rc::clone(&self.states[state_no]));
+    }
+
+    /// TODO Implementation
+    /// TODO Documentation
+    #[inline]
+    pub fn process(&mut self, ps: &mut ParsingState) {
+        if let Some(state) = self.state.take() {
+            let state = state.borrow_mut();
+            while state.process(self, ps) {}
+        }
+    }
+}
 
 // FIXME This doesn't look very Rusty...
 pub const STATE_INITIAL: usize = 0;
@@ -59,7 +100,7 @@ fn find_inline(line: &str, lang: &Language) -> Option<usize> {
 ///
 /// TODO: Implementation?
 pub trait State: Sync + Send {
-    fn process(&self, ps: &mut ParsingState, worker: &mut Worker) -> bool;
+    fn process(&self, sm: &mut LOCStateMachine, ps: &mut ParsingState) -> bool;
 }
 
 /// The initial `State` in which all `crate::locc::count::Worker`s start in.
@@ -68,7 +109,7 @@ pub struct StateInitial {}
 impl State for StateInitial {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, ps: &mut ParsingState, worker: &mut Worker) -> bool {
+    fn process(&self, _sm: &mut LOCStateMachine, ps: &mut ParsingState) -> bool {
         let line = ps.curr_line.unwrap();
         if line.is_empty() {
             return true;
@@ -79,7 +120,7 @@ impl State for StateInitial {
         }
         let first_inline_tkn = first_inline_tkn.unwrap();
 
-        worker.set_state(STATE_CODE);
+        //worker.set_state(STATE_CODE);
 
         false
     }
@@ -92,7 +133,7 @@ pub struct StateMultiLineComment {}
 impl State for StateMultiLineComment {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _ps: &mut ParsingState, _worker: &mut Worker) -> bool {
+    fn process(&self, _sm: &mut LOCStateMachine, _ps: &mut ParsingState) -> bool {
         false
     }
 }
@@ -104,7 +145,7 @@ pub struct StateCode {}
 impl State for StateCode {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _ps: &mut ParsingState, _worker: &mut Worker) -> bool {
+    fn process(&self, _sm: &mut LOCStateMachine, _ps: &mut ParsingState) -> bool {
         false
     }
 }
