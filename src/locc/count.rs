@@ -172,7 +172,28 @@ impl<'a> Coordinator<'a> {
 
 /// TODO: Implementation
 /// TODO: Documentation
-pub struct Worker<'a> {
+pub struct ParsingState<'file> {
+    pub curr_line: Option<&'file str>,
+    pub curr_line_counted: bool,
+    pub curr_lang: &'file Language,
+}
+
+impl<'file> ParsingState<'file> {
+    /// TODO: Implementation
+    /// TODO: Documentation
+    #[inline]
+    pub fn new(lang: &'file Language) -> Self {
+        ParsingState {
+            curr_line: None,
+            curr_line_counted: false,
+            curr_lang: lang,
+        }
+    }
+}
+
+/// TODO: Implementation
+/// TODO: Documentation
+pub struct Worker {
     id: usize, // FIXME just for devel? useful for logging too
     tx: chan::Sender<CountResult>,
     rx: chan::Receiver<PathBuf>,
@@ -184,13 +205,10 @@ pub struct Worker<'a> {
     state: Option<Rc<RefCell<dyn State>>>,
     states: [Rc<RefCell<dyn State>>; NUM_STATES],
 
-    pub curr_line: String,
-    //pub curr_str: Option<&'a str>,
-    pub curr_line_counted: bool,
-    pub curr_lang: Option<&'a Language>,
+    buffer: String,
 }
 
-impl<'a> Worker<'a> {
+impl<'worker, 'file: 'worker> Worker {
     /// Entry point for each Worker thread.
     fn run(mut self) -> io::Result<()> {
         #[cfg(debug_assertions)]
@@ -264,14 +282,15 @@ impl<'a> Worker<'a> {
     /// TODO: Documentation
     fn process_file(&mut self, path: &PathBuf) -> io::Result<CountResult> {
         let (_, lang) = languages::guess_language(path)?;
-        self.curr_lang = Some(lang);
-        self.set_state(STATE_INITIAL);
+
         let mut ret: CountResult = (lang.name, 1); // FIXME Count files for now
+        let mut pd = ParsingState::new(lang);
+        self.set_state(STATE_INITIAL);
 
         let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
         loop {
-            self.curr_line.clear();
-            match file_rd.read_line(&mut self.curr_line) {
+            self.buffer.clear();
+            match file_rd.read_line(&mut self.buffer) {
                 Ok(0) => {
                     #[cfg(debug_assertions)]
                     eprintln!(
@@ -285,8 +304,7 @@ impl<'a> Worker<'a> {
                     break;
                 }
                 Ok(_) => {
-                    //self.curr_str = Some(&self.curr_line);
-                    self.process_line(&mut ret)?
+                    self.process_line(&mut pd, &mut ret)?
                     // TODO somehow update self.state ?
                 }
                 Err(err) => {
@@ -315,17 +333,14 @@ impl<'a> Worker<'a> {
         Ok(ret)
     }
 
-    fn process_line(&mut self, result: &mut CountResult) -> io::Result<()> {
-        //let line = self.curr_line.trim_start();
-        //if line.is_empty() {
-        //    //result.blank += 1; // FIXME
-        //    return Ok(());
-        //}
-
-        self.curr_line_counted = false;
+    /// TODO: Implementation
+    /// TODO: Documentation
+    fn process_line(&mut self, ps: &mut ParsingState, result: &mut CountResult) -> io::Result<()> {
+        ps.curr_line_counted = false;
+        ps.curr_line = Some(&self.buffer[..]);
         if let Some(state) = self.state.take() {
             let state = state.borrow_mut();
-            while state.process(self) {}
+            while state.process(ps, self) {}
         }
 
         // TODO
@@ -366,10 +381,7 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
                         Rc::new(RefCell::new(StateCode {})),
                     ],
 
-                    curr_line: String::new(),
-                    //curr_str: None,
-                    curr_line_counted: false,
-                    curr_lang: None,
+                    buffer: String::new(),
                 };
 
                 worker.run()

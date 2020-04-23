@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use super::count::Worker;
+use super::count::{ParsingState, Worker};
 use super::languages::Language;
 
 // FIXME This doesn't look very Rusty...
@@ -59,7 +59,7 @@ fn find_inline(line: &str, lang: &Language) -> Option<usize> {
 ///
 /// TODO: Implementation?
 pub trait State: Sync + Send {
-    fn process(&self, worker: &mut Worker) -> bool;
+    fn process(&self, ps: &mut ParsingState, worker: &mut Worker) -> bool;
 }
 
 /// The initial `State` in which all `crate::locc::count::Worker`s start in.
@@ -68,12 +68,12 @@ pub struct StateInitial {}
 impl State for StateInitial {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, worker: &mut Worker) -> bool {
-        let line = worker.curr_line.trim_start();
+    fn process(&self, ps: &mut ParsingState, worker: &mut Worker) -> bool {
+        let line = ps.curr_line.unwrap();
         if line.is_empty() {
             return true;
         }
-        let first_inline_tkn = find_inline(&line, worker.curr_lang.unwrap());
+        let first_inline_tkn = find_inline(&line, ps.curr_lang);
         if first_inline_tkn.is_none() {
             return true;
         }
@@ -92,7 +92,7 @@ pub struct StateMultiLineComment {}
 impl State for StateMultiLineComment {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _worker: &mut Worker) -> bool {
+    fn process(&self, _ps: &mut ParsingState, _worker: &mut Worker) -> bool {
         false
     }
 }
@@ -104,7 +104,7 @@ pub struct StateCode {}
 impl State for StateCode {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _worker: &mut Worker) -> bool {
+    fn process(&self, _ps: &mut ParsingState, _worker: &mut Worker) -> bool {
         false
     }
 }
