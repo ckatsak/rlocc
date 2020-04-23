@@ -52,6 +52,7 @@ impl Config {
 
 /// TODO: Documentation
 impl Default for Config {
+    #[inline]
     fn default() -> Self {
         Config {
             paths: vec![env::current_dir().unwrap()],

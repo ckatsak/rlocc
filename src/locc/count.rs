@@ -18,6 +18,7 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
+use std::ops;
 use std::path::PathBuf;
 
 use crossbeam_channel as chan;
@@ -27,22 +28,83 @@ use super::languages::{self, Language};
 use super::states::*;
 use super::Config;
 
+/// TODO: Documentation
 const BUF_SIZE: usize = 1 << 14;
 
 /// TODO: Documentation
-pub type LOCCount<'a> = HashMap<&'a str, i32>;
+pub type LOCCount<'a> = HashMap<&'a str, (CountResult, usize)>;
 
-//#[derive(Debug)]
-//struct CountResult {
-//    total: i32,
-//    code: i32,
-//    comments: i32,
-//    blank: i32,
-//}
+impl<'a> ops::AddAssign<CountResult> for LOCCount<'a> {
+    /// Add-assign a `self::CountResult` to the `self::LOCCount`.
+    #[inline]
+    fn add_assign(&mut self, rhs: CountResult) {
+        self.entry(rhs.lang)
+            .and_modify(|(cnt_res, num_files)| {
+                *cnt_res += rhs;
+                *num_files += 1;
+            })
+            .or_insert((rhs, 1));
+    }
+}
+
 /// The result of counting a single file.
-type CountResult = (&'static str, i32);
+#[derive(Debug, Copy, Clone)]
+pub struct CountResult {
+    lang: &'static str,
+
+    total: usize,
+    code: usize,
+    comments: usize,
+    blank: usize,
+}
+
+//impl ops::Add<CountResult> for CountResult {
+//    type Output = CountResult;
+//
+//    /// Add a `self::CountResult` to the `self::CountResult`.
+//    fn add(mut self, rhs: CountResult) -> Self {
+//        debug_assert_eq!(self.lang, rhs.lang);
+//        self.total += rhs.total;
+//        self.code += rhs.code;
+//        self.comments += rhs.comments;
+//        self.blank += rhs.blank;
+//        self
+//    }
+//}
+
+impl ops::AddAssign for CountResult {
+    /// Add-assign a `self::CountResult` to the `self::CountResult`.
+    fn add_assign(&mut self, rhs: Self) {
+        debug_assert_eq!(self.lang, rhs.lang);
+        //*self = Self {
+        //    lang: self.lang,
+        //    total: self.total + rhs.total,
+        //    code: self.code + rhs.code,
+        //    comments: self.comments + rhs.comments,
+        //    blank: self.blank + rhs.blank,
+        //};
+        self.total += rhs.total;
+        self.code += rhs.code;
+        self.comments += rhs.comments;
+        self.blank += rhs.blank;
+    }
+}
+
+impl CountResult {
+    #[inline]
+    fn new(lang: &'static str) -> Self {
+        CountResult {
+            lang,
+            total: 0,
+            code: 0,
+            comments: 0,
+            blank: 0,
+        }
+    }
+}
 
 /// TODO: Documentation
+#[derive(Debug)]
 struct Coordinator<'coord> {
     config: &'coord Config,
     tx: chan::Sender<PathBuf>,
@@ -66,7 +128,7 @@ impl<'coord> Coordinator<'coord> {
 
         // Now loop over the receiving-end of the results channel, aggregating all of them into the
         // final LOCCount object that is going to be returned.
-        let mut ret = HashMap::new();
+        let mut ret: LOCCount<'coord> = HashMap::new();
         #[cfg(debug_assertions)]
         eprintln!(
             "[{}:{}][COORDINATOR][aggregate_results] Blocking on res_rx...",
@@ -81,9 +143,13 @@ impl<'coord> Coordinator<'coord> {
                 line!(),
                 res
             );
-            ret.entry(res.0)
-                .and_modify(|cnt| *cnt += res.1)
-                .or_insert(res.1);
+            //ret.entry(res.lang)
+            //    .and_modify(|(cnt_res, num_files)| {
+            //        *cnt_res += res;
+            //        *num_files += 1
+            //    })
+            //    .or_insert((res, 1));
+            ret += res;
         }
         #[cfg(debug_assertions)]
         eprintln!(
@@ -99,6 +165,7 @@ impl<'coord> Coordinator<'coord> {
     fn walk_paths(&self) -> io::Result<()> {
         for path in self.config.paths.iter() {
             if path.is_file() {
+                // TODO ignore some files, like .gitignore?
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[{}:{}][COORDINATOR][walk_paths] Sending {:?}...",
@@ -108,6 +175,7 @@ impl<'coord> Coordinator<'coord> {
                 );
                 self.tx.send(path.to_owned()).unwrap();
             } else if path.is_dir() {
+                // TODO ignore some dirs, like .git
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[{}:{}][COORDINATOR][walk_paths] Diving into {:?}...",
@@ -170,6 +238,7 @@ impl<'coord> Coordinator<'coord> {
 
 /// TODO: Implementation
 /// TODO: Documentation
+#[derive(Debug)]
 pub struct ParsingState<'line> {
     pub curr_line: Option<&'line str>,
     pub curr_line_counted: bool, // FIXME think again what that actually means
@@ -191,19 +260,12 @@ impl<'line> ParsingState<'line> {
 
 /// TODO: Implementation
 /// TODO: Documentation
+#[derive(Debug)]
 struct Worker {
     id: usize, // FIXME just for devel? useful for logging too
     tx: chan::Sender<CountResult>,
     rx: chan::Receiver<PathBuf>,
-
-    //state: Option<&'a mut Box<dyn State>>,
-    ////state: Option<&'a mut dyn State>,
-    //states: [Box<dyn State>; NUM_STATES],
-    ///////////////////////////
-    //state: Option<Rc<RefCell<dyn State>>>,
-    //states: [Rc<RefCell<dyn State>>; NUM_STATES],
     sm: LOCStateMachine,
-
     buffer: String,
 }
 
@@ -280,14 +342,14 @@ impl<'line, 'worker: 'line> Worker {
     /// TODO: Implementation
     /// TODO: Documentation
     fn process_file(&mut self, path: &PathBuf) -> io::Result<CountResult> {
-        let (_, lang) = languages::guess_language(path)?;
-
-        let mut ret: CountResult = (lang.name, 1); // FIXME Count files for now
-        self.sm.set_state(STATE_INITIAL);
+        self.sm.reset();
+        let (_, lang) = languages::guess_language(path)?; // FIXME non ext-based guess
+        let mut ret = CountResult::new(lang.name);
+        //let mut ret: CountResult = (lang.name, 1); // FIXME Count files for now
 
         let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
         loop {
-            let mut pd = ParsingState::new(lang);
+            let mut ps = ParsingState::new(lang);
             self.buffer.clear();
             match file_rd.read_line(&mut self.buffer) {
                 Ok(0) => {
@@ -299,11 +361,10 @@ impl<'line, 'worker: 'line> Worker {
                         self.id,
                         path.display()
                     );
-                    // TODO somehow reset self.state ?
                     break;
                 }
                 Ok(_) => {
-                    self.process_line(&mut pd, &mut ret)?;
+                    self.process_line(&mut ps, &mut ret)?;
                     // TODO somehow update self.state ?
                 }
                 Err(err) => {
@@ -337,25 +398,16 @@ impl<'line, 'worker: 'line> Worker {
     fn process_line(
         &'worker mut self,
         ps: &mut ParsingState<'line>,
-        //ps: &'file mut ParsingState<'file>,
         result: &mut CountResult,
     ) -> io::Result<()> {
-        ps.curr_line_counted = false;
         ps.curr_line = Some(&self.buffer[..]);
-        self.sm.process(ps);
-        ps.curr_line = None;
+        self.sm.process(ps, result);
+        result.total += 1;
 
         // TODO
 
         Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
     }
-
-    ///// TODO Documentation
-    //#[inline]
-    //pub fn set_state(&mut self, state_no: usize) {
-    //    //self.state = Some(&mut self.states[state_no]);
-    //    self.state = Some(Rc::clone(&self.states[state_no]));
-    //}
 }
 
 /// TODO: Implementation?
@@ -375,16 +427,8 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
                     id,
                     tx,
                     rx,
-
-                    //state: None,
-                    //states: [
-                    //    Rc::new(RefCell::new(StateInitial {})),
-                    //    Rc::new(RefCell::new(StateMultiLineComment {})),
-                    //    Rc::new(RefCell::new(StateCode {})),
-                    //],
                     sm: LOCStateMachine::new(),
-
-                    buffer: String::new(),
+                    buffer: String::with_capacity(BUF_SIZE), // FIXME? pre-allocation
                 };
 
                 worker.run()

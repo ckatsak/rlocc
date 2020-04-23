@@ -30,7 +30,7 @@ fn main() -> io::Result<()> {
 }
 
 fn print_results(loccount: &LOCCount) -> io::Result<()> {
-    // TODO
+    // FIXME impl fmt::Display for LOCCount
     eprintln!("{:#?}", loccount);
 
     Ok(())

@@ -16,7 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub use self::config::Config;
-pub use self::count::*;
+pub use self::count::{count_all, LOCCount};
 //pub use self::languages::LANGUAGES;
 //pub use self::languages::EXT_TO_LANG;
 pub use self::languages::guess_language;

@@ -18,11 +18,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::count::ParsingState;
+use super::count::{CountResult, ParsingState};
 use super::languages::Language;
 
 /// TODO Implementation
 /// TODO Documentation
+#[derive(Debug)]
 pub struct LOCStateMachine {
     state: Option<Rc<RefCell<dyn State>>>,
     states: [Rc<RefCell<dyn State>>; NUM_STATES],
@@ -48,22 +49,29 @@ impl LOCStateMachine {
         self.state = Some(Rc::clone(&self.states[state_no]));
     }
 
+    /// TODO Implementation?
+    /// TODO Documentation
+    #[inline]
+    pub fn reset(&mut self) {
+        self.set_state(STATE_INITIAL);
+    }
+
     /// TODO Implementation
     /// TODO Documentation
     #[inline]
-    pub fn process(&mut self, ps: &mut ParsingState) {
+    pub fn process(&mut self, ps: &mut ParsingState, res: &mut CountResult) {
         if let Some(state) = self.state.take() {
             let state = state.borrow_mut();
-            while state.process(self, ps) {}
+            while state.process(self, ps, res) {}
         }
     }
 }
 
 // FIXME This doesn't look very Rusty...
-pub const STATE_INITIAL: usize = 0;
-pub const STATE_MULTI_LINE_COMMENT: usize = 1;
-pub const STATE_CODE: usize = 2;
-pub const NUM_STATES: usize = 3;
+const STATE_INITIAL: usize = 0;
+const STATE_MULTI_LINE_COMMENT: usize = 1;
+const STATE_CODE: usize = 2;
+const NUM_STATES: usize = 3;
 
 ///// TODO: Implementation
 ///// TODO: Documentation
@@ -76,7 +84,7 @@ pub const NUM_STATES: usize = 3;
 //    //StateCode(StateCode),
 //}
 
-/// TODO Implementation
+/// TODO Implementation?
 /// TODO Documentation
 #[inline]
 fn find_inline(line: &str, lang: &Language) -> Option<usize> {
@@ -99,24 +107,40 @@ fn find_inline(line: &str, lang: &Language) -> Option<usize> {
 /// a Worker may change multiple times while processing a single line.
 ///
 /// TODO: Implementation?
-pub trait State: Sync + Send {
-    fn process(&self, sm: &mut LOCStateMachine, ps: &mut ParsingState) -> bool;
+trait State: Sync + Send + std::fmt::Debug {
+    /// TODO: Implementation?
+    /// TODO: Documentation
+    ///
+    /// Returns false when the State is done processing the current line and is ready to move to
+    /// the next one.
+    fn process(
+        &self,
+        sm: &mut LOCStateMachine,
+        ps: &mut ParsingState,
+        res: &mut CountResult,
+    ) -> bool;
 }
 
 /// The initial `State` in which all `crate::locc::count::Worker`s start in.
-pub struct StateInitial {}
+#[derive(Debug)]
+struct StateInitial {}
 
 impl State for StateInitial {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _sm: &mut LOCStateMachine, ps: &mut ParsingState) -> bool {
+    fn process(
+        &self,
+        sm: &mut LOCStateMachine,
+        ps: &mut ParsingState,
+        res: &mut CountResult,
+    ) -> bool {
         let line = ps.curr_line.unwrap();
         if line.is_empty() {
-            return true;
+            return false;
         }
         let first_inline_tkn = find_inline(&line, ps.curr_lang);
         if first_inline_tkn.is_none() {
-            return true;
+            return false;
         }
         let first_inline_tkn = first_inline_tkn.unwrap();
 
@@ -128,24 +152,36 @@ impl State for StateInitial {
 
 /// TODO: Implementation
 /// TODO: Documentation
-pub struct StateMultiLineComment {}
+#[derive(Debug)]
+struct StateMultiLineComment {}
 
 impl State for StateMultiLineComment {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _sm: &mut LOCStateMachine, _ps: &mut ParsingState) -> bool {
+    fn process(
+        &self,
+        _sm: &mut LOCStateMachine,
+        _ps: &mut ParsingState,
+        _res: &mut CountResult,
+    ) -> bool {
         false
     }
 }
 
 /// TODO: Implementation
 /// TODO: Documentation
-pub struct StateCode {}
+#[derive(Debug)]
+struct StateCode {}
 
 impl State for StateCode {
     /// TODO: Implementation
     /// TODO: Documentation
-    fn process(&self, _sm: &mut LOCStateMachine, _ps: &mut ParsingState) -> bool {
+    fn process(
+        &self,
+        _sm: &mut LOCStateMachine,
+        _ps: &mut ParsingState,
+        _res: &mut CountResult,
+    ) -> bool {
         false
     }
 }
