@@ -116,7 +116,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         name: "C",
         extensions: &["c", "h"],
         inline_comment_tokens: &["//"],
-        multiline_comment_start_tokens: &["/*/"],
+        multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
@@ -132,7 +132,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         name: "C#",
         extensions: &["cs"],
         inline_comment_tokens: &["//", "///"],
-        multiline_comment_start_tokens: &["/*", "/**"],
+        multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
@@ -202,7 +202,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         name: "Java",
         extensions: &["java"],
         inline_comment_tokens: &["//"],
-        multiline_comment_start_tokens: &["/*", "/**"],
+        multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["/*"],
     },
     Language {
@@ -286,7 +286,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         name: "PHP",
         extensions: &["php"],
         inline_comment_tokens: &["#", "//"],
-        multiline_comment_start_tokens: &["/*", "/**"],
+        multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
@@ -328,7 +328,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         name: "Rust",
         extensions: &["rs", "rlib"],
         inline_comment_tokens: &["//", "///", "//!"],
-        multiline_comment_start_tokens: &["/*", "/**", "/*!"],
+        multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
