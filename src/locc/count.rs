@@ -415,7 +415,8 @@ impl<'line, 'worker: 'line> Worker {
         ps: &mut ParsingState<'line>,
         cr: &mut CountResult,
     ) -> io::Result<()> {
-        ps.curr_line = Some(&self.buffer[..]);
+        //ps.curr_line = Some(&self.buffer[..]);
+        ps.curr_line = Some(&self.buffer.trim_start());
         self.sm.process(ps, cr);
         cr.total += 1;
         //debug_assert_eq!(cr.total, cr.code + cr.comments + cr.blank);

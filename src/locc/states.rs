@@ -51,14 +51,13 @@ impl LOCStateMachine {
         self.state = Some(Rc::clone(&self.states[state_no]));
     }
 
-    /// TODO Implementation?
     /// TODO Documentation
     #[inline]
     pub fn reset(&mut self) {
         self.set_state(STATE_INITIAL);
     }
 
-    /// TODO Implementation
+    /// TODO Implementation?
     /// TODO Documentation
     #[inline]
     pub fn process(&mut self, ps: &mut ParsingState, res: &mut CountResult) {
@@ -146,22 +145,25 @@ enum MultiLine {
     End,
 }
 
-/// The current state of the LOC counting procedure of a `self::LOCStateMachine`. The state of
-/// a Worker may change multiple times while processing a single line.
+/// The current state of the LOC counting procedure of a `self::LOCStateMachine`.
+/// The state of a Worker may change multiple times while processing a single line.
 ///
 /// TODO: Implementation?
 trait State: Sync + Send + std::fmt::Debug {
     /// TODO: Implementation?
     /// TODO: Documentation
     ///
-    /// Returns false when the State is done processing the current line and is ready to move to
-    /// the next one, or true when it has to be called again.
+    /// Returns false when the State is done processing the current line and is ready to move
+    /// to the next one, or true when there is more processing to be done in the same line.
     fn process(
         &self,
         sm: &mut LOCStateMachine,
         ps: &mut ParsingState,
-        res: &mut CountResult,
+        cr: &mut CountResult,
     ) -> bool;
+
+    /// Returns the unique index of this State in every `self::LOCStateMachine`'s `states` array.
+    fn get_state_no(&self) -> usize;
 }
 
 /// The initial `State` in which all `self::LOCStateMachine` start in.
@@ -169,7 +171,12 @@ trait State: Sync + Send + std::fmt::Debug {
 struct StateInitial {}
 
 impl State for StateInitial {
-    /// TODO: Implementation
+    #[inline]
+    fn get_state_no(&self) -> usize {
+        STATE_INITIAL
+    }
+
+    /// TODO: Implementation?
     /// TODO: Documentation
     fn process(
         &self,
@@ -179,29 +186,31 @@ impl State for StateInitial {
     ) -> bool {
         #[cfg(debug_assertions)]
         eprintln!("[STATE_INITIAL][process]");
-        // Trim the remainder until first non-whitespace char.
-        let line = ps.curr_line.unwrap().trim_start();
-        if line.is_empty() {
+
+        // Whitespace must have already been trimmed in ps.curr_line when
+        // populated in Worker.process_line().
+        let line_rem = ps.curr_line.unwrap();
+        if line_rem.is_empty() {
             // Count the line as blank and move on, but remain in StateInitial.
             cr.blank += 1;
             ps.curr_line_counted = true;
-            sm.set_state(STATE_INITIAL);
+            sm.set_state(self.get_state_no());
             return false; // move on to the next line
         }
 
         // Find the index of the first inline comment token, if any.
-        let first_inline_tkn = find_inline(&line, ps.curr_lang);
+        let first_inline_tkn = find_inline(&line_rem, ps.curr_lang);
         if let Some(0) = first_inline_tkn {
             // If the inline comment token is in the beginning of the line, count the
             // line as a comment, move on to the next line, but remain in StateInitial.
             cr.comments += 1;
             ps.curr_line_counted = true;
-            sm.set_state(STATE_INITIAL);
+            sm.set_state(self.get_state_no());
             return false; // move on to the next line
         }
 
         // Find the index of the first multiline comment start token, if any.
-        let first_multline_tkn_start = find_multiline(MultiLine::Start, &line, ps.curr_lang);
+        let first_multline_tkn_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
         if let Some(0) = first_multline_tkn_start {
             // If the multiline comment token is in the beginning of the line, don't count this
             // line yet (since we don't know where the comment ends), but change to StateMultiline.
@@ -223,7 +232,7 @@ impl State for StateInitial {
             // multiline comment token. Therefore, line remainder is updated, state is changed
             // to StateMultiLineComment, and we have to keep processing the same line.
             if let Some(index) = first_multline_tkn_start {
-                ps.curr_line.replace(&line[index..]); // update line remainder
+                ps.curr_line.replace(&line_rem[index..]); // update line remainder
             }
             sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
             true // keep processing the same line
@@ -238,7 +247,7 @@ impl State for StateInitial {
             let first_multline_tkn_start = first_multline_tkn_start.unwrap();
             if first_multline_tkn_start < first_inline_tkn {
                 // A multiline comment starts in this line (at some point, after the code), so...
-                ps.curr_line.replace(&line[first_multline_tkn_start..]); // update line remainder
+                ps.curr_line.replace(&line_rem[first_multline_tkn_start..]); // update line remainder
                 sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
                 true // keep processing the same line
             } else {
@@ -258,13 +267,18 @@ impl State for StateInitial {
 struct StateMultiLineComment {}
 
 impl State for StateMultiLineComment {
+    #[inline]
+    fn get_state_no(&self) -> usize {
+        STATE_MULTI_LINE_COMMENT
+    }
+
     /// TODO: Implementation
     /// TODO: Documentation
     fn process(
         &self,
         _sm: &mut LOCStateMachine,
         _ps: &mut ParsingState,
-        _res: &mut CountResult,
+        _cr: &mut CountResult,
     ) -> bool {
         #[cfg(debug_assertions)]
         eprintln!("[STATE_MULTI_LINE_COMMENT][process]");
@@ -278,17 +292,92 @@ impl State for StateMultiLineComment {
 struct StateCode {}
 
 impl State for StateCode {
-    /// TODO: Implementation
+    #[inline]
+    fn get_state_no(&self) -> usize {
+        STATE_CODE
+    }
+
+    /// TODO: Implementation?
     /// TODO: Documentation
     fn process(
         &self,
-        _sm: &mut LOCStateMachine,
-        _ps: &mut ParsingState,
-        _res: &mut CountResult,
+        sm: &mut LOCStateMachine,
+        ps: &mut ParsingState,
+        cr: &mut CountResult,
     ) -> bool {
         #[cfg(debug_assertions)]
         eprintln!("[STATE_CODE][process]");
-        false
+
+        // Trim the remainder until first non-whitespace char.
+        let line_rem = ps.curr_line.unwrap();
+        if line_rem.is_empty() {
+            // Count the line as blank and move on, but remain in StateCode.
+            cr.blank += 1;
+            ps.curr_line_counted = true;
+            sm.set_state(self.get_state_no());
+            return false; // move on to the next line
+        }
+
+        // Find the index of the first inline comment token, if any.
+        let first_inline_tkn = find_inline(&line_rem, ps.curr_lang);
+        if let Some(0) = first_inline_tkn {
+            // If the inline comment token is in the beginning of the line, count the
+            // line as a comment, move on to the next line, but remain in StateCode.
+            cr.comments += 1;
+            ps.curr_line_counted = true;
+            sm.set_state(self.get_state_no());
+            return false; // move on to the next line
+        }
+
+        // Find the index of the first multiline comment start token, if any.
+        let first_multline_tkn_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
+        if let Some(0) = first_multline_tkn_start {
+            // If the multiline comment token is in the beginning of the line, don't count this
+            // line yet (since we don't know where the comment ends), but change to StateMultiline.
+            sm.set_state(STATE_MULTI_LINE_COMMENT);
+            //return false;
+            return true; // keep processing the same line
+        }
+
+        // If the line hasn't been blank and doesn't start with an inline or a multiline
+        // comment, then count it as code, and figure out the next state.
+        cr.code += 1;
+        ps.curr_line_counted = true;
+        if first_inline_tkn.is_none() && first_multline_tkn_start.is_none() {
+            // The line is pure code, so...
+            sm.set_state(STATE_CODE); // change to StateCode
+            false // and just move on to the next line
+        } else if first_inline_tkn.is_none() && first_multline_tkn_start.is_some() {
+            // The line doesn't contain an inline comment token, and it contains a starting
+            // multiline comment token. Therefore, line remainder is updated, state is changed
+            // to StateMultiLineComment, and we have to keep processing the same line.
+            if let Some(index) = first_multline_tkn_start {
+                ps.curr_line.replace(&line_rem[index..]); // update line remainder
+            }
+            sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
+            true // keep processing the same line
+        } else if first_inline_tkn.is_some() && first_multline_tkn_start.is_none() {
+            // The line starts with code and ends with some inline comment, so...
+            sm.set_state(STATE_CODE); // change to StateCode
+            false // move on to the next line
+        } else if first_inline_tkn.is_some() && first_multline_tkn_start.is_some() {
+            // The line contains both a multiline comment starting token and an inline
+            // comment token. If the latter precedes the first, it "invalidates" it.
+            let first_inline_tkn = first_inline_tkn.unwrap();
+            let first_multline_tkn_start = first_multline_tkn_start.unwrap();
+            if first_multline_tkn_start < first_inline_tkn {
+                // A multiline comment starts in this line (at some point, after the code), so...
+                ps.curr_line.replace(&line_rem[first_multline_tkn_start..]); // update line remainder
+                sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
+                true // keep processing the same line
+            } else {
+                // The line starts with code and ends with some inline comment, so...
+                sm.set_state(STATE_CODE); // change to StateCode
+                false // move on to the next line
+            }
+        } else {
+            panic!("UNREACHABLE");
+        }
     }
 }
 
