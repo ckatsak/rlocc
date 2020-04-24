@@ -52,10 +52,10 @@ impl<'a> ops::AddAssign<CountResult> for LOCCount<'a> {
 pub struct CountResult {
     lang: &'static str,
 
-    total: usize,
-    code: usize,
-    comments: usize,
-    blank: usize,
+    pub total: usize,
+    pub code: usize,
+    pub comments: usize,
+    pub blank: usize,
 }
 
 //impl ops::Add<CountResult> for CountResult {
@@ -92,7 +92,7 @@ impl ops::AddAssign for CountResult {
 
 impl CountResult {
     #[inline]
-    fn new(lang: &'static str) -> Self {
+    pub fn new(lang: &'static str) -> Self {
         CountResult {
             lang,
             total: 0,
@@ -366,6 +366,21 @@ impl<'line, 'worker: 'line> Worker {
                 Ok(_) => {
                     self.process_line(&mut ps, &mut ret)?;
                     // TODO somehow update self.state ?
+
+                    // FIXME Do I actually need to explicitly drop ps here to keep stack memory
+                    //       from growing crazy until the loop ends? Or does drop only makes sense
+                    //       for memory allocated in the heap? Is the shadowing in the beginning of
+                    //       the loop enough to automatically free the memory for ps in the stack?
+                    //       According to docs.rs, drop() does effectively nothing for types that
+                    //       implement the Copy trait; but might leaving ps non-Copy really be the
+                    //       solution to keep stack allocation low?
+                    // UPDATE According to `std::mem::needs_drop::<ParsingState>()`, dropping ps
+                    //        certainly has no side effect. So, the memory allocated in the stack
+                    //        must probably be redeemed at the end of each loop iteration (probably
+                    //        reused for the new ps in the next iteration). This can't just be an
+                    //        unavoidable memory leak.
+                    // TODO Benchmark memory usage to verify it.
+                    drop(ps);
                 }
                 Err(err) => {
                     // FIXME proper logging?
@@ -398,15 +413,17 @@ impl<'line, 'worker: 'line> Worker {
     fn process_line(
         &'worker mut self,
         ps: &mut ParsingState<'line>,
-        result: &mut CountResult,
+        cr: &mut CountResult,
     ) -> io::Result<()> {
         ps.curr_line = Some(&self.buffer[..]);
-        self.sm.process(ps, result);
-        result.total += 1;
+        self.sm.process(ps, cr);
+        cr.total += 1;
+        //debug_assert_eq!(cr.total, cr.code + cr.comments + cr.blank);
 
-        // TODO
+        // TODO?
 
-        Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
+        //Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
+        Ok(())
     }
 }
 
@@ -450,6 +467,7 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
     ret.unwrap()
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -509,3 +527,4 @@ mod tests {
         //me.run()
     }
 }
+*/

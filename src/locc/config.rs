@@ -41,7 +41,7 @@ impl Config {
 
         Ok(Config {
             paths: args.map(PathBuf::from).collect(),
-            num_threads: if num_threads > 1 {
+            num_threads: if num_threads > 0 {
                 num_threads
             } else {
                 num_cpus::get()
