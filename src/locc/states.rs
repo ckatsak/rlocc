@@ -37,7 +37,9 @@ impl LOCStateMachine {
             state: None,
             states: [
                 Rc::new(RefCell::new(StateInitial {})),
-                Rc::new(RefCell::new(StateMultiLineComment { token: "" })),
+                Rc::new(RefCell::new(StateMultiLineComment {
+                    token: String::with_capacity(8), // > 6 == longest multiline comm token currently
+                })),
                 Rc::new(RefCell::new(StateCode {})),
             ],
         }
@@ -54,40 +56,76 @@ impl LOCStateMachine {
     /// TODO Documentation
     #[inline]
     pub fn reset(&mut self) {
-        self.set_state(STATE_INITIAL);
+        //self.set_state(STATE_INITIAL);
+        self.set_state(STATE_CODE); // FIXME Is STATE_INITIAL really unneeded?
+
+        // Probably a waste of cycles:
+        //self.states[STATE_MULTI_LINE_COMMENT]
+        //    .borrow_mut()
+        //    .set_token("");
     }
 
     /// TODO Implementation?
     /// TODO Documentation
     #[inline]
     pub fn process(&mut self, ps: &mut ParsingState, res: &mut CountResult) {
-        if let Some(state) = self.state.take() {
-            let state = state.borrow_mut();
-            while state.process(self, ps, res) {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][LOCStateMachine][process] state.process loop iteration",
-                    file!(),
-                    line!()
-                );
-            }
-            //while state.process(self, ps, res) && !ps.curr_line_counted {}
-            // TODO? ^ Maybe this could be more Rusty if State.process() returned a State enum
-            // instead of a bool, so we wouldn't need the ParsingState.curr_line_counted either.
-            // But how would this be performance-wise? How does memory allocation work for enums?
+        ////if let Some(state) = self.state.take() {
+        ////    let mut state = state.borrow_mut();
+        ////    while state.process(self, ps, res) {
+        ////        #[cfg(debug_assertions)]
+        ////        eprintln!(
+        ////            "[{}:{}][LOCStateMachine][process] state.process loop iteration\t state ={:?}",
+        ////            file!(),
+        ////            line!(),
+        ////            state,
+        ////        );
+        ////    }
+        ////    //while state.process(self, ps, res) && !ps.curr_line_counted {}
+        ////    // TODO? ^ Maybe this could be more Rusty if State.process() returned a State enum
+        ////    // instead of a bool, so we wouldn't need the ParsingState.curr_line_counted either.
+        ////    // But how would this be performance-wise? How does memory allocation work for enums?
 
-            // FIXME It is probably *here* where we should also update self.state, somehow...
-            //self.set_state(/* TODO */);
-            //loop {
-            //    let new_state = state.process(self, ps, res);
-            //    if new_state != state {
-            //        self.set_state()
-            //    }
-            //}
+        ////    // FIXME It is probably *here* where we should also update self.state, somehow...
+        ////    //self.set_state(/* TODO */);
+        ////    //loop {
+        ////    //    let new_state = state.process(self, ps, res);
+        ////    //    if new_state != state {
+        ////    //        self.set_state()
+        ////    //    }
+        ////    //}
+        ////}
+        loop {
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "[{}:{}][LOCStateMachine][process] re-entering loop...",
+                file!(),
+                line!()
+            );
+            if let Some(state) = self.state.take() {
+                let mut s = state.borrow_mut();
+                if !s.process(self, ps, res) {
+                    #[cfg(debug_assertions)]
+                    eprintln!(
+                        "[{}:{}][LOCStateMachine][process] state.process loop iteration\t state ={:?}",
+                        file!(),
+                        line!(),
+                        state,
+                    );
+                    break;
+                }
+            }
         }
         //while let Some(state) = self.state.take() {
-        //    let s = state.borrow_mut();
-        //    while s.process(self, ps, res) {}
+        //    let mut s = state.borrow_mut();
+        //    while s.process(self, ps, res) {
+        //        #[cfg(debug_assertions)]
+        //        eprintln!(
+        //            "[{}:{}][LOCStateMachine][process] state.process loop iteration\t state ={:?}",
+        //            file!(),
+        //            line!(),
+        //            state,
+        //        );
+        //    }
         //    //drop(s);
         //    //self.state = Some(state);
         //}
@@ -126,10 +164,46 @@ fn find_inline(line: &str, lang: &Language) -> Option<usize> {
 /// token was found, along with the token.
 fn find_multiline(kind: MultiLine, line: &str, lang: &Language) -> Option<(usize, &'static str)> {
     let mut ret: (usize, &str) = (line.len(), "");
+
     let tokens: &[&str] = match kind {
         MultiLine::Start => &lang.multiline_comment_start_tokens,
-        MultiLine::End => &lang.multiline_comment_end_tokens,
+        MultiLine::End(in_tkn) => {
+            if lang.name == "HTML" || lang.name == "Perl" || lang.name == "Ruby" {
+                &lang.multiline_comment_end_tokens
+            } else {
+                // Construct the multi-line comment end token, without allocating extra memory:
+
+                // First, take a reference to the given starting token str, the
+                // value of which should now be the same as the value of in_tkn.
+                let start_tkn: &str = lang.multiline_comment_start_tokens[lang
+                    .multiline_comment_start_tokens
+                    .iter()
+                    .position(|&t| t == in_tkn)
+                    .unwrap()];
+
+                // Then calculate the corresponding ending token and assign it to in_tkn.
+                in_tkn.clear();
+                in_tkn.extend(start_tkn.chars().rev().map(|c| match c {
+                    '(' => ')',
+                    '{' => '}',
+                    '<' => '>',
+                    _ => c,
+                }));
+
+                // Now, find the index of the ending token in the corresponding slice...
+                // FIXME This may not be actually needed, but then cannot return &'static
+                let i = lang
+                    .multiline_comment_end_tokens
+                    .iter()
+                    .position(|&t| t == in_tkn)
+                    .unwrap(); // FIXME?
+
+                // ...and subslice that single element.
+                &lang.multiline_comment_end_tokens[i..i + 1]
+            }
+        }
     };
+
     for &token in tokens {
         if let Some(index) = line.find(token) {
             if index < ret.0 {
@@ -137,16 +211,12 @@ fn find_multiline(kind: MultiLine, line: &str, lang: &Language) -> Option<(usize
             }
         }
     }
+
     if ret.0 != line.len() {
         Some(ret)
     } else {
         None
     }
-}
-
-enum MultiLine {
-    Start,
-    End,
 }
 
 /// The current state of the LOC counting procedure of a `self::LOCStateMachine`.
@@ -160,7 +230,7 @@ trait State: Sync + Send + std::fmt::Debug {
     /// Returns false when the State is done processing the current line and is ready to move
     /// to the next one, or true when there is more processing to be done in the same line.
     fn process(
-        &self,
+        &mut self,
         sm: &mut LOCStateMachine,
         ps: &mut ParsingState,
         cr: &mut CountResult,
@@ -188,7 +258,7 @@ impl State for StateInitial {
     /// TODO: Implementation?
     /// TODO: Documentation
     fn process(
-        &self,
+        &mut self,
         sm: &mut LOCStateMachine,
         ps: &mut ParsingState,
         cr: &mut CountResult,
@@ -222,7 +292,9 @@ impl State for StateInitial {
         let first_multiline_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
         if let Some((0, token)) = first_multiline_start {
             // If the multiline comment token is in the beginning of the line, don't count this
-            // line yet (since we don't know where the comment ends), but change to StateMultiline.
+            // line yet (since we don't know where the comment ends), but change to StateMultiline,
+            // after updating the line remainder to look past the found token.
+            ps.curr_line.replace(&line_rem[token.len()..]); // update line remainder
             sm.set_state(STATE_MULTI_LINE_COMMENT);
             sm.states[STATE_MULTI_LINE_COMMENT]
                 .borrow_mut()
@@ -288,8 +360,30 @@ impl State for StateInitial {
 /// TODO: Documentation
 #[derive(Debug)]
 struct StateMultiLineComment {
-    token: &'static str,
+    token: String,
 }
+
+/// TODO: Implementation?
+/// TODO: Documentation
+enum MultiLine<'a> {
+    Start,
+    End(&'a mut String),
+}
+
+//impl StateMultiLineComment {
+//    fn guess_end_token(&self) -> &str {
+//        self.token
+//            .chars()
+//            .rev()
+//            .map(|c| match c {
+//                '(' => ')',
+//                '{' => '}',
+//                '<' => '>',
+//                _ => c,
+//            })
+//            .collect::<String>()  // probably needs allocation...
+//    }
+//}
 
 impl State for StateMultiLineComment {
     #[inline]
@@ -299,22 +393,49 @@ impl State for StateMultiLineComment {
 
     #[inline]
     fn set_token(&mut self, token: &'static str) {
-        self.token = token;
+        //self.token = token;
+        self.token.truncate(0);
+        self.token.push_str(token);
+        debug_assert_eq!(self.token.len(), token.len());
     }
 
     /// TODO: Implementation
     /// TODO: Documentation
     fn process(
-        &self,
-        _sm: &mut LOCStateMachine,
-        _ps: &mut ParsingState,
-        _cr: &mut CountResult,
+        &mut self,
+        sm: &mut LOCStateMachine,
+        ps: &mut ParsingState,
+        cr: &mut CountResult,
     ) -> bool {
         #[cfg(debug_assertions)]
         eprintln!(
-            "[STATE_MULTI_LINE_COMMENT][process] token = {:?}",
-            self.token
+            "[STATE_MULTI_LINE_COMMENT][process] token = {:?}\tline ({}) = {}",
+            self.token,
+            cr.total + 1,
+            ps.curr_line.unwrap().trim_end(),
         );
+
+        let line_rem = ps.curr_line.unwrap();
+        if line_rem.is_empty() {
+            #[cfg(debug_assertions)]
+            eprintln!("[STATE_MULTI_LINE_COMMENT][process] LEAVING!!");
+            // Count the line as blank and move on to the next one, but remain in StateMultiLineComment.
+            cr.blank += 1;
+            ps.curr_line_counted = true;
+            sm.set_state(self.get_state_no()); // FIXME? refactor for StateString or use const?
+            return false; // move on to the next line
+        }
+
+        #[cfg(debug_assertions)]
+        eprintln!("starting token = {:?}", self.token);
+        let first_multiline_end =
+            find_multiline(MultiLine::End(&mut self.token), &line_rem, ps.curr_lang);
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "first_multiline_end = {:?}, self.token = {:?}",
+            first_multiline_end, self.token
+        );
+
         false
     }
 }
@@ -336,13 +457,17 @@ impl State for StateCode {
     /// TODO: Implementation?
     /// TODO: Documentation
     fn process(
-        &self,
+        &mut self,
         sm: &mut LOCStateMachine,
         ps: &mut ParsingState,
         cr: &mut CountResult,
     ) -> bool {
         #[cfg(debug_assertions)]
-        eprintln!("[STATE_CODE][process]");
+        eprintln!(
+            "[STATE_CODE][process] line ({}) = {}",
+            cr.total + 1,
+            ps.curr_line.unwrap().trim_end(),
+        );
 
         // Whitespace must have already been trimmed in ps.curr_line when
         // populated in Worker.process_line().
@@ -370,7 +495,9 @@ impl State for StateCode {
         let first_multiline_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
         if let Some((0, token)) = first_multiline_start {
             // If the multiline comment token is in the beginning of the line, don't count this
-            // line yet (since we don't know where the comment ends), but change to StateMultiline.
+            // line yet (since we don't know where the comment ends), but change to StateMultiline,
+            // after updating the line remainder to look past the found token.
+            ps.curr_line.replace(&line_rem[token.len()..]); // update line remainder
             sm.set_state(STATE_MULTI_LINE_COMMENT);
             sm.states[STATE_MULTI_LINE_COMMENT]
                 .borrow_mut()
