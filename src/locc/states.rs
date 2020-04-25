@@ -37,7 +37,7 @@ impl LOCStateMachine {
             state: None,
             states: [
                 Rc::new(RefCell::new(StateInitial {})),
-                Rc::new(RefCell::new(StateMultiLineComment {})),
+                Rc::new(RefCell::new(StateMultiLineComment { token: "" })),
                 Rc::new(RefCell::new(StateCode {})),
             ],
         }
@@ -168,6 +168,8 @@ trait State: Sync + Send + std::fmt::Debug {
 
     /// Returns the unique index of this State in every `self::LOCStateMachine`'s `states` array.
     fn get_state_no(&self) -> usize;
+
+    fn set_token(&mut self, token: &'static str);
 }
 
 /// The initial `State` in which all `self::LOCStateMachine` start in.
@@ -179,6 +181,9 @@ impl State for StateInitial {
     fn get_state_no(&self) -> usize {
         STATE_INITIAL
     }
+
+    #[inline]
+    fn set_token(&mut self, _: &str) {}
 
     /// TODO: Implementation?
     /// TODO: Documentation
@@ -215,18 +220,23 @@ impl State for StateInitial {
 
         // Find the index of the first multiline comment start token, if any.
         let first_multiline_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
-        if let Some((0, _)) = first_multiline_start {
+        if let Some((0, token)) = first_multiline_start {
             // If the multiline comment token is in the beginning of the line, don't count this
             // line yet (since we don't know where the comment ends), but change to StateMultiline.
             sm.set_state(STATE_MULTI_LINE_COMMENT);
-            //return false;
+            sm.states[STATE_MULTI_LINE_COMMENT]
+                .borrow_mut()
+                .set_token(token);
             return true; // keep processing the same line
         }
 
         // If the line hasn't been blank and doesn't start with an inline or a multiline
         // comment, then count it as code, and figure out the next state.
-        cr.code += 1;
-        ps.curr_line_counted = true;
+        if !ps.curr_line_counted {
+            // Don't count it twice if it has been already counted.
+            cr.code += 1;
+            ps.curr_line_counted = true;
+        }
         if first_inline_index.is_none() && first_multiline_start.is_none() {
             // The line is pure code, so...
             sm.set_state(STATE_CODE); // change to StateCode
@@ -235,10 +245,15 @@ impl State for StateInitial {
             // The line doesn't contain an inline comment token, and it contains a starting
             // multiline comment token. Therefore, line remainder is updated, state is changed
             // to StateMultiLineComment, and we have to keep processing the same line.
-            if let Some((index, token)) = first_multiline_start {
-                ps.curr_line.replace(&line_rem[index + token.len()..]); // update line remainder
-            }
+            let (index, token) = first_multiline_start.unwrap();
+            ////if let Some((index, token)) = first_multiline_start {
+            ////    ps.curr_line.replace(&line_rem[index + token.len()..]); // update line remainder
+            ////}
+            ps.curr_line.replace(&line_rem[index + token.len()..]); // update line remainder
             sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
+            sm.states[STATE_MULTI_LINE_COMMENT]
+                .borrow_mut()
+                .set_token(token);
             true // keep processing the same line
         } else if first_inline_index.is_some() && first_multiline_start.is_none() {
             // The line starts with code and ends with some inline comment, so...
@@ -254,6 +269,9 @@ impl State for StateInitial {
                 ps.curr_line // update line remainder
                     .replace(&line_rem[multi_start_index + multi_start_token.len()..]);
                 sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
+                sm.states[STATE_MULTI_LINE_COMMENT]
+                    .borrow_mut()
+                    .set_token(multi_start_token);
                 true // keep processing the same line
             } else {
                 // The line starts with code and ends with some inline comment, so...
@@ -269,12 +287,19 @@ impl State for StateInitial {
 /// TODO: Implementation
 /// TODO: Documentation
 #[derive(Debug)]
-struct StateMultiLineComment {}
+struct StateMultiLineComment {
+    token: &'static str,
+}
 
 impl State for StateMultiLineComment {
     #[inline]
     fn get_state_no(&self) -> usize {
         STATE_MULTI_LINE_COMMENT
+    }
+
+    #[inline]
+    fn set_token(&mut self, token: &'static str) {
+        self.token = token;
     }
 
     /// TODO: Implementation
@@ -286,7 +311,10 @@ impl State for StateMultiLineComment {
         _cr: &mut CountResult,
     ) -> bool {
         #[cfg(debug_assertions)]
-        eprintln!("[STATE_MULTI_LINE_COMMENT][process]");
+        eprintln!(
+            "[STATE_MULTI_LINE_COMMENT][process] token = {:?}",
+            self.token
+        );
         false
     }
 }
@@ -301,6 +329,9 @@ impl State for StateCode {
     fn get_state_no(&self) -> usize {
         STATE_CODE
     }
+
+    #[inline]
+    fn set_token(&mut self, _: &str) {}
 
     /// TODO: Implementation?
     /// TODO: Documentation
@@ -337,18 +368,23 @@ impl State for StateCode {
 
         // Find the index of the first multiline comment start token, if any.
         let first_multiline_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
-        if let Some((0, _)) = first_multiline_start {
+        if let Some((0, token)) = first_multiline_start {
             // If the multiline comment token is in the beginning of the line, don't count this
             // line yet (since we don't know where the comment ends), but change to StateMultiline.
             sm.set_state(STATE_MULTI_LINE_COMMENT);
-            //return false;
+            sm.states[STATE_MULTI_LINE_COMMENT]
+                .borrow_mut()
+                .set_token(token);
             return true; // keep processing the same line
         }
 
         // If the line hasn't been blank and doesn't start with an inline or a multiline
         // comment, then count it as code, and figure out the next state.
-        cr.code += 1;
-        ps.curr_line_counted = true;
+        if !ps.curr_line_counted {
+            // Don't count it twice if it has been already counted.
+            cr.code += 1;
+            ps.curr_line_counted = true;
+        }
         if first_inline_index.is_none() && first_multiline_start.is_none() {
             // The line is pure code, so...
             sm.set_state(STATE_CODE); // change to StateCode
@@ -357,10 +393,15 @@ impl State for StateCode {
             // The line doesn't contain an inline comment token, and it contains a starting
             // multiline comment token. Therefore, line remainder is updated, state is changed
             // to StateMultiLineComment, and we have to keep processing the same line.
-            if let Some((index, token)) = first_multiline_start {
-                ps.curr_line.replace(&line_rem[index + token.len()..]); // update line remainder
-            }
+            let (index, token) = first_multiline_start.unwrap();
+            ////if let Some((index, token)) = first_multiline_start {
+            ////    ps.curr_line.replace(&line_rem[index + token.len()..]); // update line remainder
+            ////}
+            ps.curr_line.replace(&line_rem[index + token.len()..]); // update line remainder
             sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
+            sm.states[STATE_MULTI_LINE_COMMENT]
+                .borrow_mut()
+                .set_token(token);
             true // keep processing the same line
         } else if first_inline_index.is_some() && first_multiline_start.is_none() {
             // The line starts with code and ends with some inline comment, so...
@@ -376,6 +417,9 @@ impl State for StateCode {
                 ps.curr_line
                     .replace(&line_rem[multi_start_index + multi_start_token.len()..]); // update line remainder
                 sm.set_state(STATE_MULTI_LINE_COMMENT); // change state
+                sm.states[STATE_MULTI_LINE_COMMENT]
+                    .borrow_mut()
+                    .set_token(multi_start_token);
                 true // keep processing the same line
             } else {
                 // The line starts with code and ends with some inline comment, so...
