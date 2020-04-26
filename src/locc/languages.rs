@@ -203,7 +203,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         extensions: &["java"],
         inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &["/*"],
-        multiline_comment_end_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
     },
     Language {
         name: "Javascript",

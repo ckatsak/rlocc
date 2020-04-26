@@ -38,7 +38,8 @@ impl LOCStateMachine {
             states: [
                 Rc::new(RefCell::new(StateInitial {})),
                 Rc::new(RefCell::new(StateMultiLineComment {
-                    token: String::with_capacity(8), // > 6 == longest multiline comm token currently
+                    tkn_buf: String::with_capacity(8), // > 6 == longest multiline comm token currently
+                    ready: false,
                 })),
                 Rc::new(RefCell::new(StateCode {})),
             ],
@@ -58,6 +59,9 @@ impl LOCStateMachine {
     pub fn reset(&mut self) {
         //self.set_state(STATE_INITIAL);
         self.set_state(STATE_CODE); // FIXME Is STATE_INITIAL really unneeded?
+
+        //self.states[STATE_MULTI_LINE_COMMENT].borrow_mut()
+        // FIXME <strike>ready <- false</strike> when end token is found!
 
         // Probably a waste of cycles:
         //self.states[STATE_MULTI_LINE_COMMENT]
@@ -106,7 +110,7 @@ impl LOCStateMachine {
                 if !s.process(self, ps, res) {
                     #[cfg(debug_assertions)]
                     eprintln!(
-                        "[{}:{}][LOCStateMachine][process] state.process loop iteration\t state ={:?}",
+                        "[{}:{}][LOCStateMachine][process] state.process loop iteration\tstate = {:?}",
                         file!(),
                         line!(),
                         state,
@@ -162,44 +166,71 @@ fn find_inline(line: &str, lang: &Language) -> Option<usize> {
 /// Searches `line` for a multi-line comment token (starting or ending, depending on the given
 /// `self::MultiLine` variant) and returns an `std::Option` that wraps the index at which the first
 /// token was found, along with the token.
-fn find_multiline(kind: MultiLine, line: &str, lang: &Language) -> Option<(usize, &'static str)> {
+fn find_multiline(
+    kind: &mut MultiLine,
+    line: &str,
+    lang: &Language,
+) -> Option<(usize, &'static str)> {
     let mut ret: (usize, &str) = (line.len(), "");
 
     let tokens: &[&str] = match kind {
         MultiLine::Start => &lang.multiline_comment_start_tokens,
-        MultiLine::End(in_tkn) => {
+        MultiLine::End((ref mut in_tkn, ref mut ready)) => {
             if lang.name == "HTML" || lang.name == "Perl" || lang.name == "Ruby" {
                 &lang.multiline_comment_end_tokens
             } else {
-                // Construct the multi-line comment end token, without allocating extra memory:
+                let find_index = |tkn: &str| -> &[&str] {
+                    // Find the index of the ending token in the corresponding slice...
+                    #[cfg(debug_assertions)]
+                    eprintln!(
+                        "[find_multiline] now searching for registered ending token {:?} in language {:?}",
+                        tkn, lang,
+                    );
+                    let i = lang
+                        .multiline_comment_end_tokens
+                        .iter()
+                        .position(|&t| t == tkn)
+                        .unwrap(); // FIXME?
 
-                // First, take a reference to the given starting token str, the
-                // value of which should now be the same as the value of in_tkn.
-                let start_tkn: &str = lang.multiline_comment_start_tokens[lang
-                    .multiline_comment_start_tokens
-                    .iter()
-                    .position(|&t| t == in_tkn)
-                    .unwrap()];
+                    // ...and subslice that single element.
+                    &lang.multiline_comment_end_tokens[i..i + 1]
+                };
 
-                // Then calculate the corresponding ending token and assign it to in_tkn.
-                in_tkn.clear();
-                in_tkn.extend(start_tkn.chars().rev().map(|c| match c {
-                    '(' => ')',
-                    '{' => '}',
-                    '<' => '>',
-                    _ => c,
-                }));
+                if !*ready {
+                    // Construct the multi-line comment end token, without allocating extra memory:
 
+                    // First, take a reference to the given starting token str, the
+                    // value of which should now be the same as the value of in_tkn.
+                    let start_tkn: &str = lang.multiline_comment_start_tokens[lang
+                        .multiline_comment_start_tokens
+                        .iter()
+                        .position(|t| t == in_tkn)
+                        .unwrap()];
+
+                    // Then calculate the corresponding ending token and assign it to in_tkn.
+                    in_tkn.clear();
+                    in_tkn.extend(start_tkn.chars().rev().map(|c| match c {
+                        '(' => ')',
+                        '{' => '}',
+                        '<' => '>',
+                        _ => c,
+                    }));
+
+                    // XXX This was moved in the search() closure:
+                    ////let i = lang
+                    ////    .multiline_comment_end_tokens
+                    ////    .iter()
+                    ////    .position(|&t| t == in_tkn)
+                    ////    .unwrap(); // FIXME?
+
+                    ////// ...and subslice that single element.
+                    ////&lang.multiline_comment_end_tokens[i..i + 1]
+
+                    *ready = &true;
+                }
                 // Now, find the index of the ending token in the corresponding slice...
                 // FIXME This may not be actually needed, but then cannot return &'static
-                let i = lang
-                    .multiline_comment_end_tokens
-                    .iter()
-                    .position(|&t| t == in_tkn)
-                    .unwrap(); // FIXME?
-
-                // ...and subslice that single element.
-                &lang.multiline_comment_end_tokens[i..i + 1]
+                find_index(in_tkn)
             }
         }
     };
@@ -289,7 +320,7 @@ impl State for StateInitial {
         }
 
         // Find the index of the first multiline comment start token, if any.
-        let first_multiline_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
+        let first_multiline_start = find_multiline(&mut MultiLine::Start, &line_rem, ps.curr_lang);
         if let Some((0, token)) = first_multiline_start {
             // If the multiline comment token is in the beginning of the line, don't count this
             // line yet (since we don't know where the comment ends), but change to StateMultiline,
@@ -358,33 +389,27 @@ impl State for StateInitial {
 
 /// TODO: Implementation
 /// TODO: Documentation
+//struct StateMultiLineComment<'a> {
 #[derive(Debug)]
 struct StateMultiLineComment {
-    token: String,
+    /// A state-local buffer to hold either the starting or the ending multi-line comment token
+    /// (found or searched for, respectively).
+    tkn_buf: String,
+
+    /// Indicates whether the persisted `self.tkn_buf` is ready to be searched (i.e., the ending
+    /// token has been already calculated and stored there) or if the calculation is still needed.
+    ready: bool,
 }
 
 /// TODO: Implementation?
 /// TODO: Documentation
+#[derive(Debug)]
 enum MultiLine<'a> {
     Start,
-    End(&'a mut String),
+    End((&'a mut String, &'a bool)),
 }
 
-//impl StateMultiLineComment {
-//    fn guess_end_token(&self) -> &str {
-//        self.token
-//            .chars()
-//            .rev()
-//            .map(|c| match c {
-//                '(' => ')',
-//                '{' => '}',
-//                '<' => '>',
-//                _ => c,
-//            })
-//            .collect::<String>()  // probably needs allocation...
-//    }
-//}
-
+//impl State for StateMultiLineComment<'_> {
 impl State for StateMultiLineComment {
     #[inline]
     fn get_state_no(&self) -> usize {
@@ -393,10 +418,10 @@ impl State for StateMultiLineComment {
 
     #[inline]
     fn set_token(&mut self, token: &'static str) {
-        //self.token = token;
-        self.token.truncate(0);
-        self.token.push_str(token);
-        debug_assert_eq!(self.token.len(), token.len());
+        //self.tkn_buf = token;
+        self.tkn_buf.truncate(0); // btw, looks like that's what String.clear() boils down too
+        self.tkn_buf.push_str(token);
+        debug_assert_eq!(self.tkn_buf.len(), token.len());
     }
 
     /// TODO: Implementation
@@ -409,34 +434,85 @@ impl State for StateMultiLineComment {
     ) -> bool {
         #[cfg(debug_assertions)]
         eprintln!(
-            "[STATE_MULTI_LINE_COMMENT][process] token = {:?}\tline ({}) = {}",
-            self.token,
+            "[STATE_MULTI_LINE_COMMENT][process] state = {:?}\tline ({}) = {}",
+            self,
             cr.total + 1,
             ps.curr_line.unwrap().trim_end(),
         );
 
-        let line_rem = ps.curr_line.unwrap();
+        let line_rem = ps.curr_line.unwrap().trim_end();
         if line_rem.is_empty() {
             #[cfg(debug_assertions)]
             eprintln!("[STATE_MULTI_LINE_COMMENT][process] LEAVING!!");
             // Count the line as blank and move on to the next one, but remain in StateMultiLineComment.
-            cr.blank += 1;
-            ps.curr_line_counted = true;
+            if !ps.curr_line_counted {
+                #[cfg(debug_assertions)]
+                eprintln!("[STATE_MULTI_LINE_COMMENT] counting blank line!");
+                cr.comments += 1;
+                //cr.blank += 1; // FIXME? comment or blank?
+                ps.curr_line_counted = true;
+            }
             sm.set_state(self.get_state_no()); // FIXME? refactor for StateString or use const?
             return false; // move on to the next line
         }
 
         #[cfg(debug_assertions)]
-        eprintln!("starting token = {:?}", self.token);
-        let first_multiline_end =
-            find_multiline(MultiLine::End(&mut self.token), &line_rem, ps.curr_lang);
+        eprintln!("starting token = {:?}", self.tkn_buf);
+        let mut end_variant = MultiLine::End((&mut self.tkn_buf, &mut self.ready));
+        let first_multiline_end = find_multiline(
+            &mut end_variant,
+            //&mut MultiLine::End((&mut self.tkn_buf, &mut self.ready)),
+            &line_rem,
+            ps.curr_lang,
+        );
+        if let MultiLine::End((_, r)) = end_variant {
+            self.ready = *r;
+        }
+        //let first_multiline_end = match self.end {
+        //    None => find_multiline(MultiLine::End(&mut self.tkn_buf), &line_rem, ps.curr_lang),
+        //    Some(_) => (), // TODO
+        //};
         #[cfg(debug_assertions)]
         eprintln!(
-            "first_multiline_end = {:?}, self.token = {:?}",
-            first_multiline_end, self.token
+            "first_multiline_end = {:?}, self.tkn_buf = {:?}",
+            first_multiline_end, self.tkn_buf
         );
 
-        false
+        // Since the line is not blank, if it does not contain the ending token we should
+        // count it as a comment and move on to the next line, remaining in StateMultiLine.
+        if first_multiline_end.is_none() {
+            #[cfg(debug_assertions)]
+            eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
+            cr.comments += 1;
+            ps.curr_line_counted = true;
+            sm.set_state(self.get_state_no()); // FIXME? refactor for StateString or use const?
+            return false;
+        }
+
+        // The ending token has been found within this line, but we need to make sure that
+        // there is no code in the same line before actualling counting it as a comment.
+        let (index, token) = first_multiline_end.unwrap();
+        // If the ending token is at the end of the line remainder, then we are good
+        // to count the line as a comment and move on to the next line, in StateCode.
+        // XXX First, trim the trailing whitespace too:
+        let line_rem = line_rem.trim_end();
+        if index + token.len() == line_rem.len() {
+            #[cfg(debug_assertions)]
+            eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
+            if !ps.curr_line_counted {
+                cr.comments += 1;
+                ps.curr_line_counted = true;
+            }
+            sm.set_state(STATE_CODE);
+            self.ready = false; // XXX Forget stored token
+            return false;
+        }
+        // If the ending token is not at the end of the line remainder, we probably should
+        // not count the line a comment, and pass the remainder to StateCode instead.
+        ps.curr_line.replace(&line_rem[index + token.len()..]);
+        sm.set_state(STATE_CODE);
+        self.ready = false; // XXX Forget stored token
+        true
     }
 }
 
@@ -492,7 +568,7 @@ impl State for StateCode {
         }
 
         // Find the index of the first multiline comment start token, if any.
-        let first_multiline_start = find_multiline(MultiLine::Start, &line_rem, ps.curr_lang);
+        let first_multiline_start = find_multiline(&mut MultiLine::Start, &line_rem, ps.curr_lang);
         if let Some((0, token)) = first_multiline_start {
             // If the multiline comment token is in the beginning of the line, don't count this
             // line yet (since we don't know where the comment ends), but change to StateMultiline,
