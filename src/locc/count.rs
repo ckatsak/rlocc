@@ -29,7 +29,7 @@ use super::states::*;
 use super::Config;
 
 /// TODO: Documentation
-const BUF_SIZE: usize = 1 << 14;
+const BUF_SIZE: usize = 1 << 16;
 
 /// TODO: Documentation
 pub type LOCCount<'a> = HashMap<&'a str, (CountResult, usize)>;
@@ -174,7 +174,7 @@ impl<'coord> Coordinator<'coord> {
                     path
                 );
                 self.tx.send(path.to_owned()).unwrap();
-            } else if path.is_dir() {
+            } else if path.is_dir() && !languages::is_vcs(&path) {
                 // TODO ignore some dirs, like .git
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -212,7 +212,7 @@ impl<'coord> Coordinator<'coord> {
                     direntry
                 );
                 self.tx.send(direntry).unwrap();
-            } else if direntry.is_dir() {
+            } else if direntry.is_dir() && !languages::is_vcs(&direntry) {
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[{}:{}][COORDINATOR][__walk] Diving into {:?}...",
@@ -342,10 +342,9 @@ impl<'line, 'worker: 'line> Worker {
     /// TODO: Implementation
     /// TODO: Documentation
     fn process_file(&mut self, path: &PathBuf) -> io::Result<CountResult> {
-        self.sm.reset();
         let (_, lang) = languages::guess_language(path)?; // FIXME non ext-based guess
         let mut ret = CountResult::new(lang.name);
-        //let mut ret: CountResult = (lang.name, 1); // FIXME Count files for now
+        self.sm.reset();
 
         let mut file_rd = BufReader::with_capacity(BUF_SIZE, File::open(path)?);
         loop {
@@ -419,7 +418,7 @@ impl<'line, 'worker: 'line> Worker {
         ps.curr_line = Some(&self.buffer.trim_start());
         self.sm.process(ps, cr);
         cr.total += 1;
-        //debug_assert_eq!(cr.total, cr.code + cr.comments + cr.blank);
+        debug_assert_eq!(cr.total, cr.code + cr.comments + cr.blank);
 
         // TODO?
 

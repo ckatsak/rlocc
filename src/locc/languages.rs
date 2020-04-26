@@ -79,6 +79,31 @@ where
 }
 
 /// TODO: Documentation
+pub static VCS_DIRECTORIES: &[&str] = &[
+    ".bzr", // bazaar
+    ".cvs", // cvs
+    ".git", // git
+    ".hg",  // mercurial
+    ".svn", // subversion
+];
+
+/// TODO: Documentation
+#[inline]
+pub fn is_vcs<P>(path: &P) -> bool
+where
+    P: AsRef<Path>,
+{
+    if let Some(basename) = path.as_ref().file_name() {
+        if let Some(basename) = basename.to_str() {
+            if VCS_DIRECTORIES.contains(&basename) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// TODO: Documentation
 #[derive(Debug)]
 pub struct Language {
     pub name: &'static str,
@@ -90,7 +115,7 @@ pub struct Language {
 }
 
 /// TODO: Documentation
-pub static LANG_ARRAY: [Language; 43] = [
+pub static LANG_ARRAY: [Language; 50] = [
     Language {
         name: "Ada",
         extensions: &["adb", "ads"],
@@ -114,16 +139,21 @@ pub static LANG_ARRAY: [Language; 43] = [
     },
     Language {
         name: "C",
-        extensions: &["c", "h"],
+        extensions: &["c"],
         inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
         name: "C++",
-        extensions: &[
-            "cc", "hh", "C", "H", "cpp", "hpp", "cxx", "hxx", "c++", "h++",
-        ],
+        extensions: &["cc", "C", "cpp", "cxx", "c++"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "C/C++ Header",
+        extensions: &["h", "hh", "H", "hpp", "hxx", "h++"],
         inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
@@ -134,6 +164,13 @@ pub static LANG_ARRAY: [Language; 43] = [
         inline_comment_tokens: &["//", "///"],
         multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "Comma-Separated Values",
+        extensions: &["csv"],
+        inline_comment_tokens: &[],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
     },
     Language {
         name: "D",
@@ -151,7 +188,7 @@ pub static LANG_ARRAY: [Language; 43] = [
     },
     Language {
         name: "Dockerfile",
-        extensions: &["Dockerfile"],
+        extensions: &["Dockerfile"], // FIXME
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -174,6 +211,13 @@ pub static LANG_ARRAY: [Language; 43] = [
         name: "Erlang",
         extensions: &["erl", "hrl"],
         inline_comment_tokens: &["%"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: ".gitignore",
+        extensions: &[".gitignore"], // FIXME
+        inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
@@ -227,6 +271,13 @@ pub static LANG_ARRAY: [Language; 43] = [
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
+        name: "License",
+        extensions: &["LICENSE"], // FIXME
+        inline_comment_tokens: &[],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
         name: "Lisp",
         extensions: &["lisp", "lsp", "l", "fasl"],
         inline_comment_tokens: &[";"],
@@ -235,7 +286,7 @@ pub static LANG_ARRAY: [Language; 43] = [
     },
     Language {
         name: "Makefile",
-        extensions: &["Makefile"],
+        extensions: &["Makefile", "am"], // FIXME
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -327,7 +378,7 @@ pub static LANG_ARRAY: [Language; 43] = [
     Language {
         name: "Rust",
         extensions: &["rs", "rlib"],
-        inline_comment_tokens: &["//", "///", "//!"],
+        inline_comment_tokens: &["//"], //, "///", "//!"],
         multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
@@ -367,6 +418,13 @@ pub static LANG_ARRAY: [Language; 43] = [
         multiline_comment_end_tokens: &["*)"],
     },
     Language {
+        name: "Solidity",
+        extensions: &["sol"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
         name: "TeX",
         extensions: &["tex"],
         inline_comment_tokens: &["%"],
@@ -374,7 +432,7 @@ pub static LANG_ARRAY: [Language; 43] = [
         multiline_comment_end_tokens: &[],
     },
     Language {
-        name: "plain text",
+        name: "Plain Text",
         extensions: &["txt"],
         inline_comment_tokens: &[],
         multiline_comment_start_tokens: &[],
@@ -386,6 +444,20 @@ pub static LANG_ARRAY: [Language; 43] = [
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "TOML",
+        extensions: &["toml"],
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "TypeScript",
+        extensions: &["ts"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
     },
     Language {
         name: "YAML",

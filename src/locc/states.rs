@@ -183,7 +183,7 @@ fn find_multiline(
                     // Find the index of the ending token in the corresponding slice...
                     #[cfg(debug_assertions)]
                     eprintln!(
-                        "[find_multiline] now searching for registered ending token {:?} in language {:?}",
+                        "[find_multiline] now searching for registered ending token {:?} in {:?}",
                         tkn, lang,
                     );
                     let i = lang
@@ -409,7 +409,6 @@ enum MultiLine<'a> {
     End((&'a mut String, &'a bool)),
 }
 
-//impl State for StateMultiLineComment<'_> {
 impl State for StateMultiLineComment {
     #[inline]
     fn get_state_no(&self) -> usize {
@@ -418,7 +417,6 @@ impl State for StateMultiLineComment {
 
     #[inline]
     fn set_token(&mut self, token: &'static str) {
-        //self.tkn_buf = token;
         self.tkn_buf.truncate(0); // btw, looks like that's what String.clear() boils down too
         self.tkn_buf.push_str(token);
         debug_assert_eq!(self.tkn_buf.len(), token.len());
@@ -440,11 +438,13 @@ impl State for StateMultiLineComment {
             ps.curr_line.unwrap().trim_end(),
         );
 
+        // XXX First, trim the trailing whitespace too:
         let line_rem = ps.curr_line.unwrap().trim_end();
         if line_rem.is_empty() {
             #[cfg(debug_assertions)]
-            eprintln!("[STATE_MULTI_LINE_COMMENT][process] LEAVING!!");
-            // Count the line as blank and move on to the next one, but remain in StateMultiLineComment.
+            eprintln!("[STATE_MULTI_LINE_COMMENT][process] line_rem empty - leaving!");
+            // Count the line as (blank|comment) and move on to the next one,
+            // but remain in StateMultiLineComment.
             if !ps.curr_line_counted {
                 #[cfg(debug_assertions)]
                 eprintln!("[STATE_MULTI_LINE_COMMENT] counting blank line!");
@@ -481,10 +481,12 @@ impl State for StateMultiLineComment {
         // Since the line is not blank, if it does not contain the ending token we should
         // count it as a comment and move on to the next line, remaining in StateMultiLine.
         if first_multiline_end.is_none() {
-            #[cfg(debug_assertions)]
-            eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
-            cr.comments += 1;
-            ps.curr_line_counted = true;
+            if !ps.curr_line_counted {
+                #[cfg(debug_assertions)]
+                eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
+                cr.comments += 1;
+                ps.curr_line_counted = true;
+            }
             sm.set_state(self.get_state_no()); // FIXME? refactor for StateString or use const?
             return false;
         }
@@ -494,12 +496,10 @@ impl State for StateMultiLineComment {
         let (index, token) = first_multiline_end.unwrap();
         // If the ending token is at the end of the line remainder, then we are good
         // to count the line as a comment and move on to the next line, in StateCode.
-        // XXX First, trim the trailing whitespace too:
-        let line_rem = line_rem.trim_end();
         if index + token.len() == line_rem.len() {
-            #[cfg(debug_assertions)]
-            eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
             if !ps.curr_line_counted {
+                #[cfg(debug_assertions)]
+                eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
                 cr.comments += 1;
                 ps.curr_line_counted = true;
             }
