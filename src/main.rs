@@ -22,17 +22,19 @@ use rlocc::locc::{self, Config, LOCCount};
 
 fn main() -> io::Result<()> {
     let args = env::args().skip(1).collect::<Vec<_>>();
-    let config = Config::new(args.into_iter(), 1).unwrap_or_default();
+    let config = Config::new(args.into_iter(), 0).unwrap_or_default();
+    #[cfg(debug_assertions)]
     eprintln!("{:#?}", config);
 
     let ret = locc::count_all(&config)?;
-    print_results(&ret)
+    print_results(&ret)?;
+    Ok(())
 }
 
+#[inline(always)]
 fn print_results(loccount: &LOCCount) -> io::Result<()> {
-    // FIXME impl fmt::Display for LOCCount
-    eprintln!("{:#?}", loccount);
-
+    // FIXME Buffered IO ?
+    println!("{}", loccount);
     Ok(())
 }
 

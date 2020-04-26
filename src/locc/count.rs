@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
 use std::ops;
@@ -32,13 +33,15 @@ use super::Config;
 const BUF_SIZE: usize = 1 << 16;
 
 /// TODO: Documentation
-pub type LOCCount<'a> = HashMap<&'a str, (CountResult, usize)>;
+#[derive(Debug)]
+pub struct LOCCount<'a>(HashMap<&'a str, (CountResult, usize)>);
 
 impl<'a> ops::AddAssign<CountResult> for LOCCount<'a> {
     /// Add-assign a `self::CountResult` to the `self::LOCCount`.
     #[inline]
     fn add_assign(&mut self, rhs: CountResult) {
-        self.entry(rhs.lang)
+        self.0
+            .entry(rhs.lang)
             .and_modify(|(cnt_res, num_files)| {
                 *cnt_res += rhs;
                 *num_files += 1;
@@ -128,7 +131,7 @@ impl<'coord> Coordinator<'coord> {
 
         // Now loop over the receiving-end of the results channel, aggregating all of them into the
         // final LOCCount object that is going to be returned.
-        let mut ret: LOCCount<'coord> = HashMap::new();
+        let mut ret: LOCCount<'coord> = LOCCount(HashMap::new());
         #[cfg(debug_assertions)]
         eprintln!(
             "[{}:{}][COORDINATOR][aggregate_results] Blocking on res_rx...",
@@ -308,7 +311,7 @@ impl<'line, 'worker: 'line> Worker {
                         self.id,
                     );
                 }
-                Err(err) => {
+                Err(_err) => {
                     // FIXME proper logging?
                     #[cfg(debug_assertions)]
                     eprintln!(
@@ -317,7 +320,7 @@ impl<'line, 'worker: 'line> Worker {
                         line!(),
                         self.id,
                         path,
-                        err
+                        _err
                     );
                 }
             };
@@ -465,6 +468,77 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
     .unwrap(); // TODO is there a better way to handle this?
 
     ret.unwrap()
+}
+
+impl fmt::Display for LOCCount<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const MAX_OUT_WIDTH: usize = 80;
+        const LANG_WIDTH: usize = 25;
+        const FILES_WIDTH: usize = 11;
+        const LINES_WIDTH: usize = 11;
+        const CODE_WIDTH: usize = 11;
+        const COMM_WIDTH: usize = 11;
+        const BLANK_WIDTH: usize = 11;
+
+        writeln!(f, "{:-^max$}", "", max = MAX_OUT_WIDTH)?;
+        writeln!(
+            f,
+            "{:<law$}{:>fw$}{:>liw$}{:>bw$}{:>cmw$}{:>cdw$}",
+            "Language",
+            "Files",
+            "Lines",
+            "Blanks",
+            "Comments",
+            "Code",
+            law = LANG_WIDTH,
+            fw = FILES_WIDTH,
+            liw = LINES_WIDTH,
+            bw = BLANK_WIDTH,
+            cmw = COMM_WIDTH,
+            cdw = CODE_WIDTH,
+        )?;
+        writeln!(f, "{:-^max$}", "", max = MAX_OUT_WIDTH)?;
+        let mut total_cr = CountResult::new("Total");
+        let mut total_files = 0;
+        for (lang_name, (cr, fc)) in &self.0 {
+            total_cr += *cr;
+            total_files += fc;
+            writeln!(
+                f,
+                "{:<law$}{:>fw$}{:>liw$}{:>bw$}{:>cmw$}{:>cdw$}",
+                lang_name,
+                fc,
+                cr.total,
+                cr.blank,
+                cr.comments,
+                cr.code,
+                law = LANG_WIDTH,
+                fw = FILES_WIDTH,
+                liw = LINES_WIDTH,
+                bw = BLANK_WIDTH,
+                cmw = COMM_WIDTH,
+                cdw = CODE_WIDTH,
+            )?;
+        }
+        writeln!(f, "{:-^max$}", "", max = MAX_OUT_WIDTH)?;
+        writeln!(
+            f,
+            "{:<law$}{:>fw$}{:>liw$}{:>bw$}{:>cmw$}{:>cdw$}",
+            total_cr.lang,
+            total_files,
+            total_cr.total,
+            total_cr.blank,
+            total_cr.comments,
+            total_cr.code,
+            law = LANG_WIDTH,
+            fw = FILES_WIDTH,
+            liw = LINES_WIDTH,
+            bw = BLANK_WIDTH,
+            cmw = COMM_WIDTH,
+            cdw = CODE_WIDTH,
+        )?;
+        write!(f, "{:-^max$}", "", max = MAX_OUT_WIDTH)
+    }
 }
 
 /*
