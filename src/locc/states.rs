@@ -189,11 +189,23 @@ fn find_multiline(
                     let i = lang
                         .multiline_comment_end_tokens
                         .iter()
-                        .position(|&t| t == tkn)
-                        .unwrap(); // FIXME?
+                        .position(|&t| t == tkn);
+                    ////    .position(|&t| t == tkn)
+                    ////    .unwrap(); // FIXME?
 
-                    // ...and subslice that single element.
-                    &lang.multiline_comment_end_tokens[i..i + 1]
+                    ////// ...and subslice that single element.
+                    ////&lang.multiline_comment_end_tokens[i..i + 1]
+                    //
+                    // FIXME This  ^^^  is the correct way to handle this.
+                    //       But this  vvv  is the workaround until StateString.
+                    //       In other words, the workaround counts wrong if a starting multi-line
+                    //       comment token is found within a string in the source file examined.
+                    //       This makes it identical to glocc, i.e., wrong in the same way.
+                    if let Some(i) = i {
+                        &lang.multiline_comment_end_tokens[i..i + 1]
+                    } else {
+                        &lang.multiline_comment_end_tokens
+                    }
                 };
 
                 if !*ready {
