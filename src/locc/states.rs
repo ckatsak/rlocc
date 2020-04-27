@@ -176,7 +176,14 @@ fn find_multiline(
     let tokens: &[&str] = match kind {
         MultiLine::Start => &lang.multiline_comment_start_tokens,
         MultiLine::End((ref mut in_tkn, ref mut ready)) => {
-            if lang.name == "HTML" || lang.name == "Perl" || lang.name == "Ruby" {
+            if lang.name == "Delphi"
+                || lang.name == "HTML"
+                || lang.name == "Lua"
+                || lang.name == "Pascal"
+                || lang.name == "Perl"
+                || lang.name == "Ruby"
+                || lang.name == "XML"
+            {
                 &lang.multiline_comment_end_tokens
             } else {
                 let find_index = |tkn: &str| -> &[&str] {
@@ -672,7 +679,7 @@ mod tests {
         }
     }
 
-    #[test]
+    //#[test]
     fn state_initial_empty_line() {
         let mut a = A::new(EXT_TO_LANG.get(&"rs").unwrap());
         //eprintln!("{:#?}", a);

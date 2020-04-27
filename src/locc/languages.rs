@@ -115,7 +115,7 @@ pub struct Language {
 }
 
 /// TODO: Documentation
-pub static LANG_ARRAY: [Language; 50] = [
+pub static LANG_ARRAY: [Language; 74] = [
     Language {
         name: "Ada",
         extensions: &["adb", "ads"],
@@ -131,9 +131,23 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &[],
     },
     Language {
+        name: "Autoconf",
+        extensions: &["in"],
+        inline_comment_tokens: &["dnl", "#"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
         name: "AWK",
         extensions: &["awk"],
         inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "Batch",
+        extensions: &["bat"],
+        inline_comment_tokens: &["REM", "::"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
@@ -166,11 +180,39 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
+        name: "Clojure",
+        extensions: &["clj", "cljs", "cljc", "edn"],
+        inline_comment_tokens: &[";"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "CMake",
+        extensions: &["cmake"], // FIXME CMakeLists.txt sadly goes to Plain Text
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "COBOL",
+        extensions: &["cbl", "cob", "cpy", "cobol"],
+        inline_comment_tokens: &["*>"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
         name: "Comma-Separated Values",
         extensions: &["csv"],
         inline_comment_tokens: &[],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "CSS",
+        extensions: &["css"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
     },
     Language {
         name: "D",
@@ -180,8 +222,15 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["*/", "+/"],
     },
     Language {
+        name: "Dart",
+        extensions: &["dart"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
         name: "Delphi",
-        extensions: &["p", "pp", "pas"],
+        extensions: &["p", "pp"],
         inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &["(*", "{"],
         multiline_comment_end_tokens: &["*)", "}"],
@@ -201,6 +250,13 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &[],
     },
     Language {
+        name: "Elm",
+        extensions: &["elm"],
+        inline_comment_tokens: &["--"],
+        multiline_comment_start_tokens: &["{-"], // no nested
+        multiline_comment_end_tokens: &["-}"],   // no nested
+    },
+    Language {
         name: "Elixir",
         extensions: &["ex", "exs"],
         inline_comment_tokens: &["%"],
@@ -213,6 +269,13 @@ pub static LANG_ARRAY: [Language; 50] = [
         inline_comment_tokens: &["%"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "F#",
+        extensions: &["fs", "fsi", "fsx", "fsscript"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["(*"],
+        multiline_comment_end_tokens: &["*)"],
     },
     Language {
         name: ".gitignore",
@@ -264,6 +327,20 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &[],
     },
     Language {
+        name: "Julia",
+        extensions: &["jl"],
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &["#="],
+        multiline_comment_end_tokens: &["=#"],
+    },
+    Language {
+        name: "Jupyter",
+        extensions: &["ipynb", "jpynb"],
+        inline_comment_tokens: &[],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
         name: "Kotlin",
         extensions: &["kt", "kts"],
         inline_comment_tokens: &["//"],
@@ -272,17 +349,24 @@ pub static LANG_ARRAY: [Language; 50] = [
     },
     Language {
         name: "License",
-        extensions: &["LICENSE"], // FIXME
+        extensions: &["LICENSE", "COPYING"], // FIXME
         inline_comment_tokens: &[],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
     Language {
         name: "Lisp",
-        extensions: &["lisp", "lsp", "l", "fasl"],
+        extensions: &["lisp", "lsp", "fasl"],
         inline_comment_tokens: &[";"],
         multiline_comment_start_tokens: &["#|"],
         multiline_comment_end_tokens: &["|#"],
+    },
+    Language {
+        name: "Lua",
+        extensions: &["lua"],
+        inline_comment_tokens: &["--"],
+        multiline_comment_start_tokens: &["--[["], // NOTE All the funny weird stuff though
+        multiline_comment_end_tokens: &["]]"],     // are not supported, including nesting.
     },
     Language {
         name: "Makefile",
@@ -313,6 +397,20 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["}%"],
     },
     Language {
+        name: "Nim",
+        extensions: &["nim"],
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &["#["],
+        multiline_comment_end_tokens: &["]#"],
+    },
+    Language {
+        name: "Nix",
+        extensions: &["nix"],
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
         name: "OCaml",
         extensions: &["ml", "mli"],
         inline_comment_tokens: &[],
@@ -327,6 +425,13 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
+        name: "Pascal",
+        extensions: &["pas"],
+        inline_comment_tokens: &[],
+        multiline_comment_start_tokens: &["(*", "{"], // (* to } and { to *) are
+        multiline_comment_end_tokens: &["*)", "}"],   // valid too, as they should
+    },
+    Language {
         name: "Perl",
         extensions: &["pl", "pm", "t", "pod"],
         inline_comment_tokens: &["#"],
@@ -337,6 +442,20 @@ pub static LANG_ARRAY: [Language; 50] = [
         name: "PHP",
         extensions: &["php"],
         inline_comment_tokens: &["#", "//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "Plain Text",
+        extensions: &["txt", "text"],
+        inline_comment_tokens: &[],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "Pony",
+        extensions: &["pony"],
+        inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
     },
@@ -369,6 +488,13 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &[],
     },
     Language {
+        name: "ReStructuredText",
+        extensions: &["rst"],
+        inline_comment_tokens: &[],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
         name: "Ruby",
         extensions: &["rb"],
         inline_comment_tokens: &["#"],
@@ -397,16 +523,16 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["|#"],
     },
     Language {
-        name: "Shell",
-        extensions: &["sh", "bash", "zsh", "ksh", "csh"],
+        name: "Sed",
+        extensions: &["sed"],
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
     Language {
-        name: "SQL",
-        extensions: &["sql"],
-        inline_comment_tokens: &["--"],
+        name: "Shell",
+        extensions: &["sh", "bash", "zsh", "ksh", "csh"],
+        inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
@@ -425,16 +551,23 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
+        name: "SQL",
+        extensions: &["sql"],
+        inline_comment_tokens: &["--"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "Swift",
+        extensions: &["swift"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
         name: "TeX",
         extensions: &["tex"],
         inline_comment_tokens: &["%"],
-        multiline_comment_start_tokens: &[],
-        multiline_comment_end_tokens: &[],
-    },
-    Language {
-        name: "Plain Text",
-        extensions: &["txt"],
-        inline_comment_tokens: &[],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
@@ -460,9 +593,44 @@ pub static LANG_ARRAY: [Language; 50] = [
         multiline_comment_end_tokens: &["*/"],
     },
     Language {
+        name: "V",
+        extensions: &["v"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "Vala",
+        extensions: &["vala"],
+        inline_comment_tokens: &["//"],
+        multiline_comment_start_tokens: &["/*"],
+        multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "VimL",
+        extensions: &["vim"],
+        inline_comment_tokens: &["\""],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
         name: "YAML",
         extensions: &["yaml", "yml"],
         inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "XML",
+        extensions: &["xml"],
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &["<!--"],
+        multiline_comment_end_tokens: &["-->"],
+    },
+    Language {
+        name: "Zig",
+        extensions: &["zig"],
+        inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
