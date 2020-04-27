@@ -1,14 +1,23 @@
 # rlocc
 
-My first ever project in Rust; developed while reading the Rust Book!
 
+Just another blazing fast LOC counter.
+
+Largely works, but it is not finished yet. Check the known issues below if you wish to be sure whether you wish to use it.
+
+
+### Disclaimer
+
+This is my first ever project in Rust; developed while reading the Rust Book!
 My sincere apologies to the Rust community for possibly abusing the language; at the time `rlocc` is written I've been still fighting the borrow checker.
 
 
 
 ## Known issues & TODOs
 
-- *TODO:* Makefile, Dockerfile, gitignore, License
+- *TODO:* Implement count for Makefile, Dockerfile, gitignore, License
+
+- *TODO:* some sort of macro for cleaner logging with conditional compilation
 
 - *TODO:* This README...
 

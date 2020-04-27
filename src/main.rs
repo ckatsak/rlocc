@@ -16,7 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::env;
-use std::io;
+use std::io::{self, BufWriter, Write};
 
 use rlocc::locc::{self, Config, LOCCount};
 
@@ -33,9 +33,13 @@ fn main() -> io::Result<()> {
 
 #[inline(always)]
 fn print_results(loccount: &LOCCount) -> io::Result<()> {
-    // FIXME Buffered IO ?
-    println!("{}", loccount);
-    Ok(())
+    const STDOUT_BUF_SIZE: usize = 1 << 13;
+
+    // XXX There should be some small gains by buffering IO to stdout like this...
+    //     I.e., heap allocation for the buffer vs multiple write(2) syscalls.
+    let stdout = io::stdout();
+    let mut bw = BufWriter::with_capacity(STDOUT_BUF_SIZE, stdout.lock());
+    writeln!(bw, "{}", loccount)
 }
 
 #[cfg(test)]
