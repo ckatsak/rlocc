@@ -79,13 +79,7 @@ impl ops::AddAssign for CountResult {
     /// Add-assign a `self::CountResult` to the `self::CountResult`.
     fn add_assign(&mut self, rhs: Self) {
         debug_assert_eq!(self.lang, rhs.lang);
-        //*self = Self {
-        //    lang: self.lang,
-        //    total: self.total + rhs.total,
-        //    code: self.code + rhs.code,
-        //    comments: self.comments + rhs.comments,
-        //    blank: self.blank + rhs.blank,
-        //};
+        // XXX This  ^^  will panic debug builds in impl fmt::Display for LOCCount
         self.total += rhs.total;
         self.code += rhs.code;
         self.comments += rhs.comments;
@@ -124,6 +118,7 @@ impl<'coord> Coordinator<'coord> {
 
     /// Drop the sending end of the path channel and loop through workers threads' results,
     /// aggregating them in a `rlocc::LOCCount`.
+    #[inline]
     fn aggregate_results(self) -> io::Result<LOCCount<'coord>> {
         // Drop the sending-end of the channel to signal workers that
         // they will not be receiving any more paths to process.
@@ -146,12 +141,6 @@ impl<'coord> Coordinator<'coord> {
                 line!(),
                 res
             );
-            //ret.entry(res.lang)
-            //    .and_modify(|(cnt_res, num_files)| {
-            //        *cnt_res += res;
-            //        *num_files += 1
-            //    })
-            //    .or_insert((res, 1));
             ret += res;
         }
         #[cfg(debug_assertions)]
@@ -165,6 +154,7 @@ impl<'coord> Coordinator<'coord> {
 
     /// Walk the filesystem paths given and feed the worker threads with all related subdirectories
     /// and files.
+    #[inline]
     fn walk_paths(&self) -> io::Result<()> {
         for path in self.config.paths.iter() {
             if path.is_file() {
@@ -176,9 +166,8 @@ impl<'coord> Coordinator<'coord> {
                     line!(),
                     path
                 );
-                self.tx.send(path.to_owned()).unwrap();
+                self.tx.send(path.to_owned()).unwrap(); // FIXME error handling?
             } else if path.is_dir() && !languages::is_vcs(&path) {
-                // TODO ignore some dirs, like .git
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[{}:{}][COORDINATOR][walk_paths] Diving into {:?}...",
@@ -188,7 +177,6 @@ impl<'coord> Coordinator<'coord> {
                 );
                 self.__walk(path)?;
             } else {
-                // FIXME(ckatsak): logger or something
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[{}:{}][COORDINATOR][walk_paths] Skipping non-regular file {:?}.",
@@ -225,7 +213,6 @@ impl<'coord> Coordinator<'coord> {
                 );
                 self.__walk(&direntry)?;
             } else {
-                // FIXME(ckatsak): logger or something
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[{}:{}][COORDINATOR][__walk] Skipping non-regular file {:?}.",
@@ -239,17 +226,15 @@ impl<'coord> Coordinator<'coord> {
     }
 }
 
-/// TODO: Implementation
 /// TODO: Documentation
 #[derive(Debug)]
 pub struct ParsingState<'line> {
     pub curr_line: Option<&'line str>,
-    pub curr_line_counted: bool, // FIXME think again what that actually means
+    pub curr_line_counted: bool,
     pub curr_lang: &'line Language,
 }
 
 impl<'line> ParsingState<'line> {
-    /// TODO: Implementation
     /// TODO: Documentation
     #[inline]
     pub fn new(lang: &'line Language) -> Self {
@@ -261,11 +246,10 @@ impl<'line> ParsingState<'line> {
     }
 }
 
-/// TODO: Implementation
 /// TODO: Documentation
 #[derive(Debug)]
 struct Worker {
-    id: usize, // FIXME just for devel? useful for logging too
+    id: usize,
     tx: chan::Sender<CountResult>,
     rx: chan::Receiver<PathBuf>,
     sm: LOCStateMachine,
@@ -312,7 +296,6 @@ impl<'line, 'worker: 'line> Worker {
                     );
                 }
                 Err(_err) => {
-                    // FIXME proper logging?
                     #[cfg(debug_assertions)]
                     eprintln!(
                         "[{}:{}][WORKER-{}][run] Error while processing file {:?}: {:#?}",
@@ -342,7 +325,6 @@ impl<'line, 'worker: 'line> Worker {
         Ok(())
     }
 
-    /// TODO: Implementation
     /// TODO: Documentation
     fn process_file(&mut self, path: &PathBuf) -> io::Result<CountResult> {
         let (_, lang) = languages::guess_language(path)?; // FIXME non ext-based guess
@@ -382,10 +364,9 @@ impl<'line, 'worker: 'line> Worker {
                     //        reused for the new ps in the next iteration). This can't just be an
                     //        unavoidable memory leak.
                     // TODO Benchmark memory usage to verify it.
-                    drop(ps);
+                    //drop(ps);
                 }
                 Err(err) => {
-                    // FIXME proper logging?
                     #[cfg(debug_assertions)]
                     eprintln!(
                         "[{}:{}][WORKER-{}][process_file] Error reading lines in file {}: {}",
@@ -410,27 +391,21 @@ impl<'line, 'worker: 'line> Worker {
         Ok(ret)
     }
 
-    /// TODO: Implementation
     /// TODO: Documentation
+    #[inline]
     fn process_line(
         &'worker mut self,
         ps: &mut ParsingState<'line>,
         cr: &mut CountResult,
     ) -> io::Result<()> {
-        //ps.curr_line = Some(&self.buffer[..]);
         ps.curr_line = Some(&self.buffer.trim_start());
         self.sm.process(ps, cr);
         cr.total += 1;
         debug_assert_eq!(cr.total, cr.code + cr.comments + cr.blank);
-
-        // TODO?
-
-        //Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
         Ok(())
     }
 }
 
-/// TODO: Implementation?
 /// TODO: Documentation
 pub fn count_all(config: &Config) -> io::Result<LOCCount> {
     let mut ret: Option<io::Result<LOCCount>> = None;
@@ -448,7 +423,7 @@ pub fn count_all(config: &Config) -> io::Result<LOCCount> {
                     tx,
                     rx,
                     sm: LOCStateMachine::new(),
-                    buffer: String::with_capacity(BUF_SIZE), // FIXME? pre-allocation
+                    buffer: String::with_capacity(BUF_SIZE),
                 };
 
                 worker.run()
