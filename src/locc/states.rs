@@ -132,35 +132,6 @@ fn find_multiline(
             {
                 &lang.multiline_comment_end_tokens
             } else {
-                let find_index = |tkn: &str| -> &[&str] {
-                    // Find the index of the ending token in the corresponding slice...
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[find_multiline] now searching for registered ending token {:?} in {:?}",
-                        tkn, lang,
-                    );
-                    let i = lang
-                        .multiline_comment_end_tokens
-                        .iter()
-                        .position(|&t| t == tkn);
-                    ////    .position(|&t| t == tkn)
-                    ////    .unwrap(); // FIXME
-
-                    ////// ...and subslice that single element.
-                    ////&lang.multiline_comment_end_tokens[i..i + 1]
-                    //
-                    // FIXME This  ^^^  is the correct way to handle this.
-                    //       But this  vvv  is the workaround until StateString.
-                    //       In other words, the workaround counts wrong if a starting multi-line
-                    //       comment token is found within a string in the source file examined.
-                    //       This makes it identical to glocc, i.e., wrong in the same way.
-                    if let Some(i) = i {
-                        &lang.multiline_comment_end_tokens[i..i + 1]
-                    } else {
-                        &lang.multiline_comment_end_tokens
-                    }
-                };
-
                 if !*ready {
                     // Construct the multi-line comment end token, without allocating extra memory:
 
@@ -193,9 +164,34 @@ fn find_multiline(
 
                     *ready = &true;
                 }
+
                 // Now, find the index of the ending token in the corresponding slice...
                 // FIXME This may not be actually needed, but then cannot return &'static
-                find_index(in_tkn)
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[find_multiline] now searching for registered ending token {:?} in {:?}",
+                    in_tkn, lang,
+                );
+                let i = lang
+                    .multiline_comment_end_tokens
+                    .iter()
+                    .position(|t| t == in_tkn);
+                ////    .position(|&t| t == in_tkn)
+                ////    .unwrap(); // FIXME
+
+                ////// ...and subslice that single element.
+                ////&lang.multiline_comment_end_tokens[i..i + 1]
+                //
+                // FIXME This  ^^^  is the correct way to handle this.
+                //       But this  vvv  is the workaround until StateString.
+                //       In other words, the workaround counts wrong if a starting multi-line
+                //       comment token is found within a string in the source file examined.
+                //       This makes it identical to glocc, i.e., wrong in the same way.
+                if let Some(i) = i {
+                    &lang.multiline_comment_end_tokens[i..i + 1]
+                } else {
+                    &lang.multiline_comment_end_tokens
+                }
             }
         }
     };

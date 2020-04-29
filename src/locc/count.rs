@@ -66,7 +66,12 @@ pub struct CountResult {
 //
 //    /// Add a `self::CountResult` to the `self::CountResult`.
 //    fn add(mut self, rhs: CountResult) -> Self {
-//        debug_assert_eq!(self.lang, rhs.lang);
+//        if cfg!(debug_assertions) {
+//            // exclude the case of result aggregation
+//            if self.lang != "Total" {
+//                debug_assert_eq!(self.lang, rhs.lang);
+//            }
+//        }
 //        self.total += rhs.total;
 //        self.code += rhs.code;
 //        self.comments += rhs.comments;
@@ -78,8 +83,12 @@ pub struct CountResult {
 impl ops::AddAssign for CountResult {
     /// Add-assign a `self::CountResult` to the `self::CountResult`.
     fn add_assign(&mut self, rhs: Self) {
-        debug_assert_eq!(self.lang, rhs.lang);
-        // XXX This  ^^  will panic debug builds in impl fmt::Display for LOCCount
+        if cfg!(debug_assertions) {
+            // exclude the case of result aggregation
+            if self.lang != "Total" {
+                debug_assert_eq!(self.lang, rhs.lang);
+            }
+        }
         self.total += rhs.total;
         self.code += rhs.code;
         self.comments += rhs.comments;
