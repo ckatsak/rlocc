@@ -17,3 +17,7 @@ crossbeam-utils= "0.7.2"
 
 [dev-dependencies]
 #tempfile = "3.1.0"
+
+# vv  for perf-flamegraph  vv
+#[profile.release]
+#debug = true

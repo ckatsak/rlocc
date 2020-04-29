@@ -24,7 +24,7 @@ all: build
 build:
 	$(CARGO) build --release
 
-debug:
+dev:
 	$(CARGO) build
 
 lint:

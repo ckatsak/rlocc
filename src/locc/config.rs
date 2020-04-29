@@ -18,8 +18,6 @@
 use std::env;
 use std::path::PathBuf;
 
-use num_cpus;
-
 /// TODO: Documentation
 #[derive(Debug)]
 pub struct Config {

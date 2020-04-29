@@ -47,36 +47,27 @@ impl LOCStateMachine {
     /// TODO Documentation
     #[inline]
     fn set_state(&mut self, state_no: usize) {
-        #[cfg(debug_assertions)]
-        eprintln!("[LOCStateMachine][set_state] to {}", state_no);
+        rlocc_dbg_log!("[LOCStateMachine][set_state] to {}", state_no);
         self.state = Some(Rc::clone(&self.states[state_no]));
     }
 
     /// TODO Documentation
     #[inline]
     pub fn reset(&mut self) {
-        self.set_state(STATE_CODE); // FIXME Is STATE_INITIAL really unneeded?
+        self.set_state(STATE_CODE);
     }
 
     /// TODO Documentation
     #[inline]
     pub fn process(&mut self, ps: &mut ParsingState, res: &mut CountResult) {
         loop {
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "[{}:{}][LOCStateMachine][process] re-entering loop...",
-                file!(),
-                line!()
-            );
+            rlocc_dbg_log!("[LOCStateMachine][process] re-entering loop...");
             if let Some(state) = self.state.take() {
                 let mut s = state.borrow_mut();
                 if !s.process(self, ps, res) {
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[{}:{}][LOCStateMachine][process] state.process loop iteration\tstate = {:?}",
-                        file!(),
-                        line!(),
-                        state,
+                    rlocc_dbg_log!(
+                        "[LOCStateMachine][process] state.process loop iteration\tstate = {:?}",
+                        state
                     );
                     break;
                 }
@@ -132,35 +123,6 @@ fn find_multiline(
             {
                 &lang.multiline_comment_end_tokens
             } else {
-                let find_index = |tkn: &str| -> &[&str] {
-                    // Find the index of the ending token in the corresponding slice...
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[find_multiline] now searching for registered ending token {:?} in {:?}",
-                        tkn, lang,
-                    );
-                    let i = lang
-                        .multiline_comment_end_tokens
-                        .iter()
-                        .position(|&t| t == tkn);
-                    ////    .position(|&t| t == tkn)
-                    ////    .unwrap(); // FIXME
-
-                    ////// ...and subslice that single element.
-                    ////&lang.multiline_comment_end_tokens[i..i + 1]
-                    //
-                    // FIXME This  ^^^  is the correct way to handle this.
-                    //       But this  vvv  is the workaround until StateString.
-                    //       In other words, the workaround counts wrong if a starting multi-line
-                    //       comment token is found within a string in the source file examined.
-                    //       This makes it identical to glocc, i.e., wrong in the same way.
-                    if let Some(i) = i {
-                        &lang.multiline_comment_end_tokens[i..i + 1]
-                    } else {
-                        &lang.multiline_comment_end_tokens
-                    }
-                };
-
                 if !*ready {
                     // Construct the multi-line comment end token, without allocating extra memory:
 
@@ -193,9 +155,34 @@ fn find_multiline(
 
                     *ready = &true;
                 }
+
                 // Now, find the index of the ending token in the corresponding slice...
                 // FIXME This may not be actually needed, but then cannot return &'static
-                find_index(in_tkn)
+                rlocc_dbg_log!(
+                    "[find_multiline] now searching for registered ending token {:?} in {:?}",
+                    in_tkn,
+                    lang
+                );
+                let i = lang
+                    .multiline_comment_end_tokens
+                    .iter()
+                    .position(|t| t == in_tkn);
+                ////    .position(|&t| t == in_tkn)
+                ////    .unwrap(); // FIXME
+
+                ////// ...and subslice that single element.
+                ////&lang.multiline_comment_end_tokens[i..i + 1]
+                //
+                // FIXME This  ^^^  is the correct way to handle this.
+                //       But this  vvv  is the workaround until StateString.
+                //       In other words, the workaround counts wrong if a starting multi-line
+                //       comment token is found within a string in the source file examined.
+                //       This makes it identical to glocc, i.e., wrong in the same way.
+                if let Some(i) = i {
+                    &lang.multiline_comment_end_tokens[i..i + 1]
+                } else {
+                    &lang.multiline_comment_end_tokens
+                }
             }
         }
     };
@@ -274,24 +261,21 @@ impl State for StateMultiLineComment {
         ps: &mut ParsingState,
         cr: &mut CountResult,
     ) -> bool {
-        #[cfg(debug_assertions)]
-        eprintln!(
+        rlocc_dbg_log!(
             "[STATE_MULTI_LINE_COMMENT][process] state = {:?}\tline ({}) = {}",
             self,
             cr.total + 1,
-            ps.curr_line.unwrap().trim_end(),
+            ps.curr_line.unwrap().trim_end()
         );
 
         // XXX First, trim the trailing whitespace too:
         let line_rem = ps.curr_line.unwrap().trim_end();
         if line_rem.is_empty() {
-            #[cfg(debug_assertions)]
-            eprintln!("[STATE_MULTI_LINE_COMMENT][process] line_rem empty - leaving!");
+            rlocc_dbg_log!("[STATE_MULTI_LINE_COMMENT][process] line_rem empty - leaving!");
             // Count the line as (blank|comment) and move on to the next one,
             // but remain in StateMultiLineComment.
             if !ps.curr_line_counted {
-                #[cfg(debug_assertions)]
-                eprintln!("[STATE_MULTI_LINE_COMMENT] counting blank line!");
+                rlocc_dbg_log!("[STATE_MULTI_LINE_COMMENT] counting line as comment|blank");
                 cr.comments += 1;
                 //cr.blank += 1; // FIXME? comment or blank?
                 ps.curr_line_counted = true;
@@ -300,25 +284,23 @@ impl State for StateMultiLineComment {
             return false; // move on to the next line
         }
 
-        #[cfg(debug_assertions)]
-        eprintln!("starting token = {:?}", self.tkn_buf);
+        rlocc_dbg_log!("starting token = {:?}", self.tkn_buf);
         let mut end_variant = MultiLine::End((&mut self.tkn_buf, &mut self.ready));
         let first_multiline_end = find_multiline(&mut end_variant, &line_rem, ps.curr_lang);
         if let MultiLine::End((_, r)) = end_variant {
             self.ready = *r;
         }
-        #[cfg(debug_assertions)]
-        eprintln!(
+        rlocc_dbg_log!(
             "first_multiline_end = {:?}, self.tkn_buf = {:?}",
-            first_multiline_end, self.tkn_buf
+            first_multiline_end,
+            self.tkn_buf
         );
 
         // Since the line is not blank, if it does not contain the ending token we should
         // count it as a comment and move on to the next line, remaining in StateMultiLine.
         if first_multiline_end.is_none() {
             if !ps.curr_line_counted {
-                #[cfg(debug_assertions)]
-                eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
+                rlocc_dbg_log!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line");
                 cr.comments += 1;
                 ps.curr_line_counted = true;
             }
@@ -333,8 +315,7 @@ impl State for StateMultiLineComment {
         // to count the line as a comment and move on to the next line, in StateCode.
         if index + token.len() == line_rem.len() {
             if !ps.curr_line_counted {
-                #[cfg(debug_assertions)]
-                eprintln!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line!");
+                rlocc_dbg_log!("[STATE_MULTI_LINE_COMMENT] counting multi-line comment line");
                 cr.comments += 1;
                 ps.curr_line_counted = true;
             }
@@ -371,11 +352,10 @@ impl State for StateCode {
         ps: &mut ParsingState,
         cr: &mut CountResult,
     ) -> bool {
-        #[cfg(debug_assertions)]
-        eprintln!(
+        rlocc_dbg_log!(
             "[STATE_CODE][process] line ({}) = {}",
             cr.total + 1,
-            ps.curr_line.unwrap().trim_end(),
+            ps.curr_line.unwrap().trim_end()
         );
 
         // Whitespace must have already been trimmed in ps.curr_line when
@@ -383,6 +363,7 @@ impl State for StateCode {
         let line_rem = ps.curr_line.unwrap();
         if line_rem.is_empty() {
             // Count the line as blank and move on, but remain in StateCode.
+            rlocc_dbg_log!("[STATE_CODE][process] counting line as blank");
             cr.blank += 1;
             ps.curr_line_counted = true;
             sm.set_state(self.get_state_no());
@@ -394,6 +375,7 @@ impl State for StateCode {
         if let Some(0) = first_inline_index {
             // If the inline comment token is in the beginning of the line, count the
             // line as a comment, move on to the next line, but remain in StateCode.
+            rlocc_dbg_log!("[STATE_CODE][process] counting line as comment");
             cr.comments += 1;
             ps.curr_line_counted = true;
             sm.set_state(self.get_state_no());
@@ -418,6 +400,7 @@ impl State for StateCode {
         // comment, then count it as code, and figure out the next state.
         if !ps.curr_line_counted {
             // Don't count it twice if it has been already counted.
+            rlocc_dbg_log!("[STATE_CODE][process] counting line as code");
             cr.code += 1;
             ps.curr_line_counted = true;
         }
@@ -463,7 +446,7 @@ impl State for StateCode {
                 false // move on to the next line
             }
         } else {
-            panic!("UNREACHABLE");
+            unreachable!();
         }
     }
 }

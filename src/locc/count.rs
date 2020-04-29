@@ -66,7 +66,12 @@ pub struct CountResult {
 //
 //    /// Add a `self::CountResult` to the `self::CountResult`.
 //    fn add(mut self, rhs: CountResult) -> Self {
-//        debug_assert_eq!(self.lang, rhs.lang);
+//        if cfg!(debug_assertions) {
+//            // exclude the case of result aggregation
+//            if self.lang != "Total" {
+//                debug_assert_eq!(self.lang, rhs.lang);
+//            }
+//        }
 //        self.total += rhs.total;
 //        self.code += rhs.code;
 //        self.comments += rhs.comments;
@@ -78,8 +83,12 @@ pub struct CountResult {
 impl ops::AddAssign for CountResult {
     /// Add-assign a `self::CountResult` to the `self::CountResult`.
     fn add_assign(&mut self, rhs: Self) {
-        debug_assert_eq!(self.lang, rhs.lang);
-        // XXX This  ^^  will panic debug builds in impl fmt::Display for LOCCount
+        if cfg!(debug_assertions) {
+            // exclude the case of result aggregation
+            if self.lang != "Total" {
+                debug_assert_eq!(self.lang, rhs.lang);
+            }
+        }
         self.total += rhs.total;
         self.code += rhs.code;
         self.comments += rhs.comments;
@@ -127,28 +136,15 @@ impl<'coord> Coordinator<'coord> {
         // Now loop over the receiving-end of the results channel, aggregating all of them into the
         // final LOCCount object that is going to be returned.
         let mut ret: LOCCount<'coord> = LOCCount(HashMap::new());
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "[{}:{}][COORDINATOR][aggregate_results] Blocking on res_rx...",
-            file!(),
-            line!()
-        );
+        rlocc_dbg_log!("[Coordinator][aggregate_results] Blocking on res_rx...");
         while let Ok(res) = self.rx.recv() {
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "[{}:{}][COORDINATOR][aggregate_results] Received '{:?}'. Blocking on res_rx again...",
-                file!(),
-                line!(),
+            rlocc_dbg_log!(
+                "[Coordinator][aggregate_results] Received '{:?}'. Blocking on res_rx again...",
                 res
             );
             ret += res;
         }
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "[{}:{}][COORDINATOR][aggregate_results] res_rs looks disconnected and empty!",
-            file!(),
-            line!()
-        );
+        rlocc_dbg_log!("[Coordinator][aggregate_results] res_rs looks disconnected and empty!");
         Ok(ret)
     }
 
@@ -158,30 +154,14 @@ impl<'coord> Coordinator<'coord> {
     fn walk_paths(&self) -> io::Result<()> {
         for path in self.config.paths.iter() {
             if path.is_file() {
-                // TODO ignore some files, like .gitignore?
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][COORDINATOR][walk_paths] Sending {:?}...",
-                    file!(),
-                    line!(),
-                    path
-                );
+                rlocc_dbg_log!("[Coordinator][walk_paths] Sending {:?}...", path);
                 self.tx.send(path.to_owned()).unwrap(); // FIXME error handling?
             } else if path.is_dir() && !languages::is_vcs(&path) {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][COORDINATOR][walk_paths] Diving into {:?}...",
-                    file!(),
-                    line!(),
-                    path
-                );
+                rlocc_dbg_log!("[Coordinator][walk_paths] Diving into {:?}...", path);
                 self.__walk(path)?;
             } else {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][COORDINATOR][walk_paths] Skipping non-regular file {:?}.",
-                    file!(),
-                    line!(),
+                rlocc_dbg_log!(
+                    "[Coordinator][walk_paths] Skipping non-regular file {:?}.",
                     path
                 );
             }
@@ -195,29 +175,14 @@ impl<'coord> Coordinator<'coord> {
         for direntry in fs::read_dir(path)? {
             let direntry = direntry?.path();
             if direntry.is_file() {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][COORDINATOR][__walk] Sending {:?}...",
-                    file!(),
-                    line!(),
-                    direntry
-                );
+                rlocc_dbg_log!("[Coordinator][__walk] Sending {:?}...", direntry);
                 self.tx.send(direntry).unwrap();
             } else if direntry.is_dir() && !languages::is_vcs(&direntry) {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][COORDINATOR][__walk] Diving into {:?}...",
-                    file!(),
-                    line!(),
-                    direntry
-                );
+                rlocc_dbg_log!("[Coordinator][__walk] Diving into {:?}...", direntry);
                 self.__walk(&direntry)?;
             } else {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[{}:{}][COORDINATOR][__walk] Skipping non-regular file {:?}.",
-                    file!(),
-                    line!(),
+                rlocc_dbg_log!(
+                    "[Coordinator][__walk] Skipping non-regular file {:?}.",
                     direntry
                 );
             }
@@ -259,48 +224,30 @@ struct Worker {
 impl<'line, 'worker: 'line> Worker {
     /// Entry point for each Worker thread.
     fn run(mut self) -> io::Result<()> {
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "[{}:{}][WORKER-{}][run] Blocking on paths_rx...",
-            file!(),
-            line!(),
-            self.id
-        );
+        rlocc_dbg_log!("[Worker-{}][run] Blocking on paths_rx...", self.id);
         while let Ok(path) = self.rx.recv() {
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "[{}:{}][WORKER-{}][run] Received {:?} from paths_rx!",
-                file!(),
-                line!(),
+            rlocc_dbg_log!(
+                "[Worker-{}][run] Received {:?} from paths_rx!",
                 self.id,
                 path
             );
 
             match self.process_file(&path) {
                 Ok(res) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[{}:{}][WORKER-{}][run] Sending '{:?}' down on res_rx...",
-                        file!(),
-                        line!(),
+                    rlocc_dbg_log!(
+                        "[Worker-{}][run] Sending '{:?}' down on res_rx...",
                         self.id,
                         res
                     );
                     self.tx.send(res).unwrap(); // FIXME error handling?
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[{}:{}][WORKER-{}][run] Sent! Now blocking on paths_rx again...",
-                        file!(),
-                        line!(),
-                        self.id,
+                    rlocc_dbg_log!(
+                        "[Worker-{}][run] Sent! Now blocking on paths_rx again...",
+                        self.id
                     );
                 }
                 Err(_err) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[{}:{}][WORKER-{}][run] Error while processing file {:?}: {:#?}",
-                        file!(),
-                        line!(),
+                    rlocc_dbg_log!(
+                        "[Worker-{}][run] Error while processing file {:?}: {:#?}",
                         self.id,
                         path,
                         _err
@@ -308,12 +255,9 @@ impl<'line, 'worker: 'line> Worker {
                 }
             };
         }
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "[{}:{}][WORKER-{}][run] paths_rx looks disconnected and empty!",
-            file!(),
-            line!(),
-            self.id,
+        rlocc_dbg_log!(
+            "[Worker-{}][run] paths_rx looks disconnected and empty!",
+            self.id
         );
         // At this point, the paths' channel must have been disconnected by the Coordinator and
         // emptied by the Worker(s).
@@ -337,13 +281,10 @@ impl<'line, 'worker: 'line> Worker {
             self.buffer.clear();
             match file_rd.read_line(&mut self.buffer) {
                 Ok(0) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[{}:{}][WORKER-{}][process_file] Reached EOF in file {}",
-                        file!(),
-                        line!(),
+                    rlocc_dbg_log!(
+                        "[worker-{}][process_file] Reached EOF in file {:?}",
                         self.id,
-                        path.display()
+                        path
                     );
                     break;
                 }
@@ -367,27 +308,17 @@ impl<'line, 'worker: 'line> Worker {
                     //drop(ps);
                 }
                 Err(err) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "[{}:{}][WORKER-{}][process_file] Error reading lines in file {}: {}",
-                        file!(),
-                        line!(),
+                    rlocc_dbg_log!(
+                        "[worker-{}][process_file] Error reading lines in file {:?}: {}",
                         self.id,
-                        path.display(),
-                        err,
+                        path,
+                        err
                     );
                     return Err(err);
                 }
             }
         }
 
-        //Err(io::Error::new(io::ErrorKind::Other, "UNIMPLEMENTED"))
-        //Ok(CountResult {
-        //    total: 0,
-        //    code: 0,
-        //    comments: 0,
-        //    blank: 0,
-        //})
         Ok(ret)
     }
 
