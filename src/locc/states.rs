@@ -446,7 +446,7 @@ impl State for StateCode {
                 false // move on to the next line
             }
         } else {
-            panic!("UNREACHABLE");
+            unreachable!();
         }
     }
 }

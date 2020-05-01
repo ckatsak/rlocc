@@ -17,9 +17,9 @@
 
 #[macro_use]
 macro_rules! rlocc_dbg_log {
-    ( $fmt:expr ) => {
+    ( $s:expr ) => {
         #[cfg(debug_assertions)]
-        eprintln!( concat!( "[", file!(), ":", line!(), "]\t", $fmt));
+        eprintln!( concat!( "[", file!(), ":", line!(), "]\t", $s));
     };
 
     ( $fmt:expr, $( $s:expr ),+ ) => {
@@ -35,4 +35,4 @@ mod states;
 
 pub use self::config::Config;
 pub use self::count::{count_all, LOCCount};
-pub use self::languages::guess_language;
+pub use self::languages::{guess_language, Language};
