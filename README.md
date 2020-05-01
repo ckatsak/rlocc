@@ -13,10 +13,142 @@ My sincere apologies to the Rust community for possibly abusing the language; at
 
 
 
-## Known issues & TODOs
+## Contents
 
-- *TODO:* This README...
+- [Installation](#installation)
+- [Usage](#usage)
+- [Platforms](#platforms)
+- [Supported File Types](#supported-file-types)
+- [Known issues & TODOs](#known-issues)
 
-- (longer) *TODO:* For now, when a token that begins a multi-line comment appears inside a string (in any supported language that supports both multi-line comments and strings) , `rlocc` cannot handle it and the results of LOC count for that whole file get calculated wrong with high probability.
 
-- Nested comments are not handled. (I don't think I'm gonna fix this, since it's not a use case for me.)
+
+## Installation <a name="installation"></a>
+
+Assuming Rust is installed, it can be installed using the Makefile:
+
+```text
+$ make
+```
+
+which simply uses cargo as usual:
+
+```text
+$ cargo build --release
+```
+
+
+
+## Usage <a name="usage"></a>
+
+Although `rlocc` has been developed as a library, it was mostly meant to be run through its accompanying binary.
+In other words, its API is not really well thought for use outside the provided binary.
+
+As a command line tool, rlocc is very simple to use: it receives any number of file or directory names as a command line input, and walks through them counting them.
+
+For example, to count files `file1`, `../file3` and all files under `~/dir2`, one can issue:
+
+```text
+$ rlocc file1 ~/dir2 ../file3
+```
+
+No command line flags are supported at this time.
+
+
+
+## Platforms <a name="platforms"></a>
+
+So far, `rlocc` has only been tested with Rust `1.43.0` on `linux/amd64`.
+
+
+
+## Supported File Types <a name="supported-file-types"></a>
+
+Currently `rlocc` supports 75 types of files.
+It guesses the file type mostly via file name extensions, with very few exceptions (for Makefile, Dockerfile, etc).
+
+The exhaustive list of all supported file types:
+
+- Ada
+- Assembly
+- Autoconf
+- AWK
+- Batch
+- C
+- C++
+- C/C++ Header
+- C#
+- Clojure
+- CMake
+- COBOL
+- CSV
+- CSS
+- D
+- Dart
+- Delphi
+- Dockerfile
+- Eiffel
+- Elm
+- Elixir
+- Erlang
+- F#
+- .gitignore
+- Go
+- Haskell
+- HTML
+- Java
+- Javascript
+- JSON
+- Julia
+- Jupyter
+- Kotlin
+- License files
+- Lisp
+- Lua
+- Makefile
+- MAL (MonetDB)
+- Markdown
+- Matlab
+- Nim
+- Nix
+- OCaml
+- OpenCL
+- Pascal
+- Perl
+- PHP
+- Plain Text
+- Pony
+- PowerShell
+- Protocol Buffers
+- Python
+- R
+- ReStructuredText
+- Ruby
+- Rust
+- Scala
+- Scheme
+- Sed
+- Shell
+- SML
+- Solidity
+- SQL
+- Swift
+- TeX
+- Tcl
+- TOML
+- TypeScript
+- V
+- Vala
+- VimL
+- WebAssembly (text format)
+- YAML
+- XML
+- Zig
+
+
+
+## Known issues & TODOs <a name="known-issues"></a>
+
+- *TODO:* For now, when a token that begins a multi-line comment appears inside a string (in any supported language that supports both multi-line comments and strings) , `rlocc` cannot handle it and the results of LOC count for that whole file get calculated wrong with high probability.
+
+- Nested comments are not handled. (I don't think I'm gonna fix this, since it's not really a use case for me.)
