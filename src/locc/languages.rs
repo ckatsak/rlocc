@@ -46,6 +46,9 @@ pub static EXT_TO_LANG: Lazy<HashMap<&'static str, &'static Language>> = Lazy::n
     ext2lang
 });
 
+static GUESSED_FILE_NAMES: &[&str] =
+    &["copying", "dockerfile", ".gitignore", "makefile", "license"];
+
 /// This function attempts to figure out whether the given path corresponds to a file whose
 /// contained source code is written in a language supported by rlocc.
 ///
@@ -57,25 +60,55 @@ where
     P: 'a + AsRef<Path>,
 {
     let path = path.as_ref();
-    let ext = path
-        .extension()
-        .ok_or_else(|| {
+    if let Some(ext) = path.extension() {
+        let ext = match ext.to_str() {
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Extension contains invalid UTF-8",
+                ))
+            }
+            Some(e) => e,
+        };
+
+        let lang = EXT_TO_LANG.get(&ext).ok_or_else(|| {
             io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Invalid extension in {}", path.display()),
+                io::ErrorKind::NotFound,
+                format!("Unsupported extension '{}'", ext),
             )
-        })?
-        .to_str()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Extension contains invalid UTF-8"))?;
+        })?;
 
-    let lang = EXT_TO_LANG.get(&ext).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("Unsupported extension '{}'", ext),
-        )
-    })?;
-
-    Ok((ext, *lang))
+        Ok((ext, *lang))
+    } else {
+        let mut found: (&str, Option<&&Language>) = ("", None);
+        let basename = path.file_name().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Cannot retrieve file name for {:?}", path),
+            )
+        })?;
+        // FIXME A string allocation per each file that is not recognized
+        // will be detrimental to the overall performance
+        // XXX Do we avoid the allocation of a new String using the method
+        // to_string_lossy() and Cow if the basename is already in lowercase?
+        // Anyway, it probably still sucks performance-wise...
+        let basename = basename.to_string_lossy().to_lowercase();
+        //let basename = basename.to_str().unwrap().to_lowercase(); // no lossy
+        for name in GUESSED_FILE_NAMES {
+            if basename.contains(name) {
+                found = (name, EXT_TO_LANG.get(name));
+            }
+        }
+        Ok((
+            found.0,
+            found.1.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("Unsupported type of file {:?}", path),
+                )
+            })?,
+        ))
+    }
 }
 
 /// TODO: Documentation
@@ -115,7 +148,7 @@ pub struct Language {
 }
 
 /// TODO: Documentation
-pub static LANG_ARRAY: [Language; 74] = [
+pub static LANG_ARRAY: [Language; 75] = [
     Language {
         name: "Ada",
         extensions: &["adb", "ads"],
@@ -237,7 +270,7 @@ pub static LANG_ARRAY: [Language; 74] = [
     },
     Language {
         name: "Dockerfile",
-        extensions: &["Dockerfile"], // FIXME
+        extensions: &["dockerfile"],
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -279,7 +312,7 @@ pub static LANG_ARRAY: [Language; 74] = [
     },
     Language {
         name: ".gitignore",
-        extensions: &[".gitignore"], // FIXME
+        extensions: &[".gitignore"],
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -349,7 +382,7 @@ pub static LANG_ARRAY: [Language; 74] = [
     },
     Language {
         name: "License",
-        extensions: &["LICENSE", "COPYING"], // FIXME
+        extensions: &["license", "copying"],
         inline_comment_tokens: &[],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -370,7 +403,7 @@ pub static LANG_ARRAY: [Language; 74] = [
     },
     Language {
         name: "Makefile",
-        extensions: &["Makefile", "am"], // FIXME
+        extensions: &["makefile", "am"],
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -531,7 +564,7 @@ pub static LANG_ARRAY: [Language; 74] = [
     },
     Language {
         name: "Shell",
-        extensions: &["sh", "bash", "zsh", "ksh", "csh"],
+        extensions: &["sh", "bash", "zsh", "fish", "ksh", "csh"],
         inline_comment_tokens: &["#"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
@@ -610,6 +643,13 @@ pub static LANG_ARRAY: [Language; 74] = [
         name: "VimL",
         extensions: &["vim"],
         inline_comment_tokens: &["\""],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
+    },
+    Language {
+        name: "WebAssembly (text)",
+        extensions: &["wat"],
+        inline_comment_tokens: &[";;"],
         multiline_comment_start_tokens: &[],
         multiline_comment_end_tokens: &[],
     },
