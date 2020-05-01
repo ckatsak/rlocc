@@ -3,7 +3,12 @@
 
 Just another blazing fast LOC counter.
 
-Largely works, but it is not finished yet. Check the known issues below if you want to be sure whether you wish to use it.
+Largely works, but it is not finished yet.
+Check the [known issues below](#known-issues) if you want to be sure whether you wish to use it.
+
+![Build Status (master)](https://img.shields.io/travis/com/ckatsak/rlocc/master?label=master&style=for-the-badge)
+![Build Status (develop)](https://img.shields.io/travis/com/ckatsak/rlocc/develop?label=develop&style=for-the-badge)
+![GitHub](https://img.shields.io/github/license/ckatsak/rlocc?style=for-the-badge)
 
 
 ### Disclaimer
@@ -58,7 +63,7 @@ No command line flags are supported at this time.
 
 ## Platforms <a name="platforms"></a>
 
-So far, `rlocc` has only been tested with Rust `1.43.0` on `linux/amd64`.
+So far `rlocc` has only been tested on `linux/amd64` with Rust `1.42.0` or later.
 
 
 
