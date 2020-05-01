@@ -148,7 +148,7 @@ pub struct Language {
 }
 
 /// TODO: Documentation
-pub static LANG_ARRAY: [Language; 75] = [
+pub static LANG_ARRAY: [Language; 76] = [
     Language {
         name: "Ada",
         extensions: &["adb", "ads"],
@@ -596,6 +596,26 @@ pub static LANG_ARRAY: [Language; 75] = [
         inline_comment_tokens: &["//"],
         multiline_comment_start_tokens: &["/*"],
         multiline_comment_end_tokens: &["*/"],
+    },
+    Language {
+        name: "Systemd",
+        extensions: &[
+            "automount",
+            "device",
+            "link",
+            "mount",
+            "path",
+            "scope",
+            "service",
+            "slice",
+            "socket",
+            "swap",
+            "target",
+            "timer",
+        ],
+        inline_comment_tokens: &["#"],
+        multiline_comment_start_tokens: &[],
+        multiline_comment_end_tokens: &[],
     },
     Language {
         name: "TeX",

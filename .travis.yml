@@ -1,0 +1,16 @@
+language: rust
+dist: xenial
+
+rust:
+  - stable
+  - beta
+  - nightly
+  - 1.42.0
+
+jobs:
+  allow_failures:
+    - rust: nightly
+    - rust: beta
+    - rust: stable
+      if: branch = develop
+  fast_finish: true

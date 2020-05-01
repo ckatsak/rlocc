@@ -50,6 +50,22 @@ impl<'a> ops::AddAssign<CountResult> for LOCCount<'a> {
     }
 }
 
+impl<'a, 'b: 'a> ops::AddAssign<LOCCount<'b>> for LOCCount<'a> {
+    /// Add-assign a `self::LOCCount` to `self::LOCCount`.
+    #[inline]
+    fn add_assign(&mut self, rhs: LOCCount<'b>) {
+        for (lang, content) in rhs.0.iter() {
+            self.0
+                .entry(lang)
+                .and_modify(|(cnt_res, num_files)| {
+                    *cnt_res += content.0;
+                    *num_files += content.1;
+                })
+                .or_insert((content.0, content.1));
+        }
+    }
+}
+
 /// The result of counting a single file.
 #[derive(Debug, Copy, Clone)]
 pub struct CountResult {
@@ -114,7 +130,7 @@ impl CountResult {
 struct Coordinator<'coord> {
     config: &'coord Config,
     tx: chan::Sender<PathBuf>,
-    rx: chan::Receiver<CountResult>,
+    rx: chan::Receiver<LOCCount<'coord>>,
 }
 
 impl<'coord> Coordinator<'coord> {
@@ -213,18 +229,19 @@ impl<'line> ParsingState<'line> {
 
 /// TODO: Documentation
 #[derive(Debug)]
-struct Worker {
+struct Worker<'w> {
     id: usize,
-    tx: chan::Sender<CountResult>,
+    tx: chan::Sender<LOCCount<'w>>,
     rx: chan::Receiver<PathBuf>,
     sm: LOCStateMachine,
     buffer: String,
 }
 
-impl<'line, 'worker: 'line> Worker {
+impl<'w, 'line, 'worker: 'line> Worker<'w> {
     /// Entry point for each Worker thread.
     fn run(mut self) -> io::Result<()> {
         rlocc_dbg_log!("[Worker-{}][run] Blocking on paths_rx...", self.id);
+        let mut ret = LOCCount(HashMap::new());
         while let Ok(path) = self.rx.recv() {
             rlocc_dbg_log!(
                 "[Worker-{}][run] Received {:?} from paths_rx!",
@@ -235,11 +252,11 @@ impl<'line, 'worker: 'line> Worker {
             match self.process_file(&path) {
                 Ok(res) => {
                     rlocc_dbg_log!(
-                        "[Worker-{}][run] Sending '{:?}' down on res_rx...",
+                        "[Worker-{}][run] Calculation for file {:?} has been completed!",
                         self.id,
-                        res
+                        path
                     );
-                    self.tx.send(res).unwrap(); // FIXME error handling?
+                    ret += res;
                     rlocc_dbg_log!(
                         "[Worker-{}][run] Sent! Now blocking on paths_rx again...",
                         self.id
@@ -261,6 +278,14 @@ impl<'line, 'worker: 'line> Worker {
         );
         // At this point, the paths' channel must have been disconnected by the Coordinator and
         // emptied by the Worker(s).
+
+        rlocc_dbg_log!(
+            "[Worker-{}][run] Sending '{:?}' down on res_rx...",
+            self.id,
+            ret
+        );
+        self.tx.send(ret).unwrap(); // FIXME error handling?
+        rlocc_dbg_log!("[Worker-{}][run] Sent! My job is done...", self.id);
 
         // Release the sending-end of the channel to signal Coordinator
         // that he will not be receiving any more results from me.

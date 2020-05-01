@@ -1,10 +1,13 @@
 [package]
 name = "rlocc"
-version = "0.1.0"
+version = "0.2.1"
 authors = ["Christos Katsakioris <ckatsak@gmail.com>"]
 edition = "2018"
 license = "GPL-3.0-or-later"
 description = "Count lines of code in files or directories."
+homepage = "https://github.com/ckatsak/rlocc"
+repository = "https://github.com/ckatsak/rlocc"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,6 +21,7 @@ crossbeam-utils= "0.7.2"
 [dev-dependencies]
 #tempfile = "3.1.0"
 
+[profile.release]
+lto = true
 # vv  for perf-flamegraph  vv
-#[profile.release]
 #debug = true
