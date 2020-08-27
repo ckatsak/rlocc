@@ -17,12 +17,12 @@
 
 CARGO = cargo
 
-.PHONY: all build debug lint test clean
+.PHONY: all release dev lint test clean
 
-all: build
+all: release
 
-build:
-	$(CARGO) build --release
+release:
+	RUSTFLAGS="-Ctarget-cpu=native" cargo build --release
 
 dev:
 	$(CARGO) build

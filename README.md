@@ -38,7 +38,7 @@ $ make
 which simply uses cargo as usual:
 
 ```text
-$ cargo build --release
+$ RUSTFLAGS="-Ctarget-cpu=native" cargo build --release
 ```
 
 
@@ -68,7 +68,7 @@ So far `rlocc` has only been tested on `linux/amd64` with Rust `1.42.0` or later
 
 ## Supported File Types <a name="supported-file-types"></a>
 
-Currently `rlocc` supports 75 types of files.
+Currently `rlocc` supports 76 types of files.
 It guesses the file type mostly via file name extensions, with very few exceptions (for Makefile, Dockerfile, etc).
 
 The exhaustive list of all supported file types:
@@ -137,6 +137,7 @@ The exhaustive list of all supported file types:
 - Solidity
 - SQL
 - Swift
+- Systemd
 - TeX
 - Tcl
 - TOML
