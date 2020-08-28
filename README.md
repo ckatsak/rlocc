@@ -19,7 +19,8 @@ My sincere apologies to the Rust community for possibly abusing the language; at
 
 ## Contents
 
-- [Build](#installation)
+- [Installation](#installation)
+- [Build](#build)
 - [Usage](#usage)
 - [Platforms](#platforms)
 - [Supported File Types](#supported-file-types)
@@ -27,7 +28,19 @@ My sincere apologies to the Rust community for possibly abusing the language; at
 
 
 
-## Build <a name="installation"></a>
+## Installation <a name="installation"></a>
+
+Using cargo:
+
+```text
+$ cargo install rlocc
+```
+
+Otherwise, build from source code as described in the [following section](#build).
+
+
+
+## Build <a name="build"></a>
 
 Assuming Rust is already installed, `rlocc` can be built using the provided Makefile:
 
@@ -45,7 +58,7 @@ $ RUSTFLAGS="-Ctarget-cpu=native" cargo build --release
 
 ## Usage <a name="usage"></a>
 
-Even though `rlocc` has been developed as a library, for now it is mostly meant to be used through the accompanying binary.
+Even though `rlocc` has been developed as a library, it is mostly meant to be used through the accompanying binary, for now.
 In other words, its API is not really well-thought for use outside the provided binary.
 
 As a command line tool, `rlocc` is very simple to use: it receives any number of file or directory names as command line input, and walks through them counting them.
@@ -56,7 +69,7 @@ For example, to count files `file1`, `../file3` and all files under `~/dir2`, on
 $ rlocc file1 ~/dir2 ../file3
 ```
 
-No command line flags are supported at this time.
+No command line flags or special options are supported at this time.
 
 
 
@@ -154,10 +167,10 @@ The exhaustive list of all supported file types:
 
 ## Known issues & TODOs <a name="known-issues"></a>
 
-- *TODO:* Proper code & installation documentation to publish at crates.io.
+- *TODO:* Documentation.
 
-- *TODO:* Command line options for the binary.
+- *TODO:* Command line options for the binary
 
-- *TODO:* For now, when a token that begins a multi-line comment appears inside a string (in any supported language that supports both multi-line comments and strings) , `rlocc` cannot handle it and the results of LOC count for that whole file get calculated wrong with high probability.
+- *TODO:* For now, **if** a token that begins a multi-line comment appears inside a string (i.e., for any supported language that features both multi-line comments and strings), `rlocc` does not handle it correctly and the LOC count results for that file are most probably calculated wrong.
 
-- Nested comments are not handled. (I don't think I'm gonna fix this, since it's not really a use case for me.)
+- Nested comments are not handled. (Fixing this is low priority to me, since it's not really a use case I frequently come across.)

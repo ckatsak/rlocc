@@ -17,21 +17,24 @@
 
 CARGO = cargo
 
-.PHONY: all release dev lint test clean
+.PHONY: all release dev check test update clean
 
 all: release
 
-release:
-	RUSTFLAGS="-Ctarget-cpu=native" cargo build --release
+release: update
+	RUSTFLAGS="-Ctarget-cpu=native" $(CARGO) build --release
 
-dev:
+dev: update
 	$(CARGO) build
 
-lint:
-	$(CARGO) clippy
+check: update
+	$(CARGO) clippy --verbose
 
-test:
+test: update
 	$(CARGO) test -- --show-output
+
+update:
+	$(CARGO) update
 
 clean:
 	$(CARGO) clean

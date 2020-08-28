@@ -5,6 +5,7 @@ authors = ["Christos Katsakioris <ckatsak@gmail.com>"]
 edition = "2018"
 license = "GPL-3.0-or-later"
 description = "Count lines of code in files or directories."
+keywords = ["cloc", "loc", "lines", "cli", "utility"]
 homepage = "https://github.com/ckatsak/rlocc"
 repository = "https://github.com/ckatsak/rlocc"
 readme = "README.md"
